@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ארגז הכלים של ההרפתקן — כלי ניהול D&D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Frank+Ruhl+Libre:wght@500;700;900&family=Assistant:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #12151f;
+    --bg-alt: #0d0f17;
+    --panel: #1c2130;
+    --panel-2: #242b3f;
+    --panel-3: #2c3449;
+    --line: #3a4258;
+    --line-soft: #2a3146;
+    --ink: #ece6d6;
+    --ink-dim: #a8a496;
+    --ink-faint: #706c60;
+    --gold: #d4a24c;
+    --gold-bright: #f0c674;
+    --gold-dim: #8a6a34;
+    --combat: #c1443c;
+    --combat-bg: #2c1917;
+    --combat-line: #5a2b26;
+    --nature: #57946a;
+    --nature-bg: #16241c;
+    --nature-line: #2c4a37;
+    --utility: #5b93bd;
+    --utility-bg: #16222c;
+    --utility-line: #2c4457;
+    --danger: #c1443c;
+    --success: #57946a;
+    --font-display: 'Frank Ruhl Libre', 'David Libre', serif;
+    --font-body: 'Assistant', 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+    --radius: 10px;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background: var(--bg);
+    background-image:
+      radial-gradient(ellipse at 15% 0%, rgba(212,162,76,0.06), transparent 55%),
+      radial-gradient(ellipse at 85% 100%, rgba(87,148,106,0.05), transparent 55%);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  ::selection{ background: var(--gold-dim); color: var(--ink); }
+
+  input, select, textarea, button{ font-family: inherit; }
+
+  /* ---------- header ---------- */
+  header.top{
+    background: linear-gradient(180deg, var(--bg-alt), var(--bg));
+    border-bottom: 1px solid var(--line-soft);
+    padding: 28px 24px 0;
+  }
+  .top-inner{ max-width: 1180px; margin: 0 auto; }
+  .top-title-row{
+    display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+    margin-bottom: 4px;
+  }
+  h1.brand{
+    font-family: var(--font-display);
+    font-weight: 900;
+    font-size: 30px;
+    margin:0;
+    color: var(--gold-bright);
+    letter-spacing: 0.5px;
+  }
+  .brand-sub{
+    font-size: 13px;
+    color: var(--ink-faint);
+    font-family: var(--font-mono);
+    letter-spacing: 0.5px;
+  }
+  .top-desc{
+    color: var(--ink-dim);
+    font-size: 14px;
+    margin: 2px 0 20px;
+  }
+
+  /* ---------- tab nav ---------- */
+  nav.tabs{
+    display:flex; gap:6px; overflow-x:auto;
+    padding-bottom: 0;
+  }
+  nav.tabs::-webkit-scrollbar{ height:0; }
+  .tab-btn{
+    display:flex; align-items:center; gap:8px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    color: var(--ink-faint);
+    padding: 11px 18px 12px;
+    border-radius: 10px 10px 0 0;
+    cursor: pointer;
+    font-size: 14.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    transition: color .15s, background .15s;
+  }
+  .tab-btn .dot{
+    width:8px; height:8px; border-radius:50%;
+    background: currentColor; opacity: .55; flex-shrink:0;
+  }
+  .tab-btn:hover{ color: var(--ink); }
+  .tab-btn.active{
+    color: var(--ink);
+    background: var(--panel);
+    border-color: var(--line-soft);
+  }
+  .tab-btn.active .dot{ background: var(--gold); opacity:1; }
+
+  /* ---------- main ---------- */
+  main{
+    max-width: 1180px; margin: 0 auto;
+    background: var(--panel);
+    border: 1px solid var(--line-soft);
+    border-radius: 0 0 14px 14px;
+    padding: 26px 24px 40px;
+    min-height: 60vh;
+  }
+  section.pane{ display:none; }
+  section.pane.active{ display:block; animation: fade .18s ease; }
+  @keyframes fade{ from{ opacity:0; transform: translateY(3px);} to{opacity:1; transform:none;} }
+
+  h2.pane-title{
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 22px;
+    color: var(--gold-bright);
+    margin: 0 0 4px;
+  }
+  p.pane-note{
+    color: var(--ink-dim); font-size: 13.5px; margin: 0 0 22px;
+  }
+
+  .grid2{ display:grid; grid-template-columns: 1.15fr 1fr; gap: 20px; }
+  .grid3{ display:grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+  @media(max-width: 860px){ .grid2, .grid3{ grid-template-columns: 1fr; } }
+
+  .card{
+    background: var(--panel-2);
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+  }
+  .card + .card{ margin-top: 14px; }
+  .card h3{
+    font-family: var(--font-display);
+    font-size: 16.5px;
+    margin: 0 0 12px;
+    color: var(--ink);
+    font-weight: 700;
+    display:flex; align-items:center; gap:8px;
+  }
+  .card h3 small{
+    font-family: var(--font-mono); font-size: 11px; color: var(--ink-faint); font-weight: 400;
+  }
+
+  label.field-label{
+    display:block; font-size: 12.5px; color: var(--ink-dim); margin-bottom:4px;
+  }
+  input[type=text], input[type=number], select{
+    width:100%;
+    background: var(--panel-3);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    border-radius: 7px;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+  input[type=text]:focus, input[type=number]:focus, select:focus{
+    outline: none; border-color: var(--gold-dim); box-shadow: 0 0 0 2px rgba(212,162,76,0.15);
+  }
+  .row{ display:flex; gap:10px; flex-wrap: wrap; align-items:flex-end; }
+  .row > div{ flex:1; min-width: 90px; }
+  .row.tight > div{ min-width: 70px; }
+
+  button.btn{
+    background: var(--panel-3);
+    border: 1px solid var(--line);
+    color: var(--ink);
+    padding: 9px 16px;
+    border-radius: 7px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .15s, border-color .15s, transform .05s;
+  }
+  button.btn:hover{ background: #333c55; border-color: var(--gold-dim); }
+  button.btn:active{ transform: scale(0.97); }
+  button.btn.gold{ background: var(--gold-dim); border-color: var(--gold); color: #1a1408; }
+  button.btn.gold:hover{ background: var(--gold); }
+  button.btn.danger{ border-color: var(--combat-line); color: #f0a29c; }
+  button.btn.danger:hover{ background: var(--combat-bg); }
+  button.btn.success{ border-color: var(--nature-line); color: #a9d8b6; }
+  button.btn.success:hover{ background: var(--nature-bg); }
+  button.btn.small{ padding: 5px 10px; font-size: 12px; }
+  button.btn.icon-only{ padding: 6px 9px; }
+  button.btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  .chip-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom: 14px; }
+  .chip{
+    padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight:600;
+    border: 1px solid var(--line); color: var(--ink-dim); cursor:pointer;
+    background: var(--panel-3);
+  }
+  .chip.active{ color: var(--ink); border-color: currentColor; }
+  .chip[data-cat=combat].active{ color: var(--combat); background: var(--combat-bg); border-color: var(--combat-line); }
+  .chip[data-cat=environmental].active{ color: var(--nature); background: var(--nature-bg); border-color: var(--nature-line); }
+  .chip[data-cat=utility].active{ color: var(--utility); background: var(--utility-bg); border-color: var(--utility-line); }
+  .chip[data-cat=all].active{ color: var(--gold-bright); border-color: var(--gold); background: var(--panel-3); }
+
+  .spell-item{
+    display:flex; align-items:center; gap:12px;
+    padding: 10px 12px; margin-bottom: 8px;
+    background: var(--panel-3);
+    border-right: 4px solid var(--line);
+    border-radius: 6px;
+  }
+  .spell-item.cat-combat{ border-color: var(--combat); }
+  .spell-item.cat-environmental{ border-color: var(--nature); }
+  .spell-item.cat-utility{ border-color: var(--utility); }
+  .spell-item .name{ font-weight:700; flex:1; }
+  .spell-item .lvl{
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink-faint);
+    background: var(--panel); padding: 2px 8px; border-radius: 5px;
+  }
+  .spell-item .note{ font-size:12px; color: var(--ink-dim); flex:2; }
+
+  .empty-state{
+    color: var(--ink-faint); font-size: 13.5px; text-align:center;
+    padding: 22px 10px; border: 1px dashed var(--line); border-radius: 8px;
+  }
+
+  .slot-row{ display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+  .slot-row .lvl-label{
+    font-family: var(--font-mono); width: 58px; color: var(--ink-dim); font-size:13px;
+  }
+  .slot-pips{ display:flex; gap:5px; flex:1; flex-wrap:wrap; }
+  .pip{
+    width:20px; height:20px; border-radius:4px; border:1px solid var(--line);
+    background: var(--panel); cursor:pointer; flex-shrink:0;
+  }
+  .pip.used{ background: var(--gold-dim); border-color: var(--gold); }
+  .slot-max-input{ width:52px !important; text-align:center; }
+
+  .recommend-box{
+    background: var(--utility-bg); border: 1px solid var(--utility-line);
+    border-radius: 8px; padding: 14px 16px; margin-top: 6px;
+  }
+  .recommend-box .title{ color: var(--utility); font-weight:700; font-size: 13px; margin-bottom:6px; }
+  .recommend-box .spell-name{ font-family: var(--font-display); font-size:19px; color: var(--ink); }
+  .recommend-box .spell-meta{ font-size: 12.5px; color: var(--ink-dim); margin-top:2px; }
+
+  .result-box{
+    background: var(--panel-3); border: 1px solid var(--line);
+    border-radius: 8px; padding: 14px 16px; margin-top: 10px;
+    display:flex; gap: 24px; flex-wrap:wrap;
+  }
+  .result-box .stat{ text-align:center; }
+  .result-box .stat .num{
+    font-family: var(--font-mono); font-size: 26px; font-weight:700; color: var(--gold-bright);
+  }
+  .result-box .stat .lbl{ font-size: 11.5px; color: var(--ink-dim); margin-top:2px; }
+
+  table.simple{ width:100%; border-collapse: collapse; font-size: 13.5px; }
+  table.simple th{ text-align: right; color: var(--ink-faint); font-weight:600; font-size:11.5px; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+  table.simple td{ padding: 7px 8px; border-bottom: 1px solid var(--line-soft); }
+  table.simple tr:last-child td{ border-bottom:none; }
+
+  .list-item{
+    display:flex; align-items:center; gap:10px;
+    background: var(--panel-3); border-radius: 7px; padding: 9px 12px; margin-bottom:8px;
+  }
+  .list-item .grow{ flex:1; }
+  .uses-track{ display:flex; gap:4px; }
+  .use-pip{ width:16px; height:16px; border-radius:50%; background: var(--panel); border:1px solid var(--line); }
+  .use-pip.spent{ background: var(--combat); border-color: var(--combat); }
+
+  .badge{ display:inline-block; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:700; font-family: var(--font-mono); }
+  .badge.short{ background: var(--utility-bg); color: var(--utility); border:1px solid var(--utility-line); }
+  .badge.long{ background: var(--nature-bg); color: var(--nature); border:1px solid var(--nature-line); }
+
+  .attack-row{ background: var(--panel-3); border-radius: 7px; padding: 10px 12px; margin-bottom:8px; }
+  .attack-row .row{ margin-bottom: 6px; }
+  .attack-row .avg{ font-family: var(--font-mono); color: var(--gold-bright); font-weight:700; }
+
+  .die-face{
+    display:inline-flex; align-items:center; justify-content:center;
+    width: 46px; height:46px; border-radius: 9px;
+    background: var(--panel-3); border: 1px solid var(--line);
+    font-family: var(--font-mono); font-weight:700; font-size: 18px;
+    transition: transform .35s cubic-bezier(.36,1.5,.5,1);
+  }
+  .die-face.rolling{ transform: rotate(360deg) scale(1.08); }
+  .dice-tray{ display:flex; gap:8px; flex-wrap:wrap; margin: 12px 0; }
+
+  .hist-bar-row{ display:flex; align-items:center; gap:8px; margin-bottom:3px; }
+  .hist-label{ width:38px; font-family: var(--font-mono); font-size:11px; color: var(--ink-faint); text-align:left; }
+  .hist-track{ flex:1; background: var(--panel); border-radius:4px; overflow:hidden; height:14px; }
+  .hist-fill{ height:100%; background: linear-gradient(90deg, var(--utility), var(--gold)); }
+  .hist-count{ width:34px; font-family: var(--font-mono); font-size:10.5px; color: var(--ink-faint); }
+
+  .combatant{
+    display:flex; align-items:center; gap:12px;
+    background: var(--panel-3); border-radius: 8px; padding: 10px 14px; margin-bottom:8px;
+    border: 1px solid var(--line-soft);
+  }
+  .combatant.active-turn{ border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
+  .combatant.dead{ opacity: .45; }
+  .combatant .init-num{
+    font-family: var(--font-mono); font-size: 20px; font-weight:700; color: var(--gold-bright);
+    width: 34px; text-align:center;
+  }
+  .combatant .cname{ font-weight:700; }
+  .combatant .cname.enemy{ color: var(--combat); }
+  .combatant .cname.ally{ color: var(--nature); }
+  .hp-bar-wrap{ width: 130px; }
+  .hp-bar{ height: 8px; border-radius: 4px; background: var(--panel); overflow:hidden; margin-bottom:3px; }
+  .hp-bar-fill{ height:100%; background: var(--nature); transition: width .2s; }
+  .hp-text{ font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); text-align:center; }
+
+  .round-badge{
+    font-family: var(--font-mono); background: var(--panel-3); border:1px solid var(--gold-dim);
+    color: var(--gold-bright); padding: 6px 16px; border-radius: 20px; font-weight:700; font-size:13px;
+  }
+
+  .resource-bar-big{ height: 20px; border-radius: 6px; background: var(--panel); overflow:hidden; border:1px solid var(--line); }
+  .resource-bar-big-fill{ height:100%; transition: width .25s; }
+
+  .hd-pips{ display:flex; gap:5px; flex-wrap:wrap; }
+  .hd-pip{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-mono); font-size:11px; background: var(--panel-3); border:1px solid var(--line); }
+  .hd-pip.used{ background: var(--panel); color: var(--ink-faint); border-style:dashed; }
+
+  .loot-item{ display:flex; align-items:center; gap:10px; background: var(--panel-3); border-radius:7px; padding:8px 12px; margin-bottom:6px; }
+  .member-card{ background: var(--panel-3); border-radius:8px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+  .member-card .gold-num{ font-family: var(--font-mono); font-size: 18px; color: var(--gold-bright); font-weight:700; min-width: 90px; text-align:center; }
+
+  .icon-btn{
+    background:none; border:none; color: var(--ink-faint); cursor:pointer; font-size:16px; padding:4px 6px;
+    border-radius:5px;
+  }
+  .icon-btn:hover{ color: var(--combat); background: var(--combat-bg); }
+
+  .footnote{ font-size:12px; color: var(--ink-faint); margin-top:10px; }
+
+  @media(max-width: 640px){
+    .row{ flex-direction: column; }
+    .row > div{ width:100%; }
+    header.top{ padding: 20px 14px 0; }
+    main{ padding: 20px 14px 30px; border-radius:0; }
+    h1.brand{ font-size:24px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="top-title-row">
+      <h1 class="brand">ארגז הכלים של ההרפתקן</h1>
+      <span class="brand-sub">D&amp;D 5E · TOOLKIT</span>
+    </div>
+    <p class="top-desc">שישה כלים לניהול קרב, לחשים, משאבים ושלל — הכול במקום אחד.</p>
+    <nav class="tabs" id="tabNav"></nav>
+  </div>
+</header>
+
+<main id="mainPane"></main>
+
+<script>
+/* =========================================================
+   כלי ניהול D&D — מצב גלובלי
+   ========================================================= */
+const state = {
+  activeTab: 'setup',
+
+  spells: [
+    {id: uid(), name:'ירית קסם', category:'combat', level:0, note:'1ד10 נזק פורס, טווח 36 מ׳'},
+    {id: uid(), name:'ריפוי פצעים', category:'utility', level:1, note:'1ד8+מאפיין ריפוי במגע'},
+    {id: uid(), name:'ערפל שולט', category:'environmental', level:1, note:'עשן ענק מסתיר שדה'},
+  ],
+  slots: {1:{max:4,used:0},2:{max:3,used:0},3:{max:2,used:0},4:{max:1,used:0},5:{max:0,used:0},6:{max:0,used:0},7:{max:0,used:0},8:{max:0,used:0},9:{max:0,used:0}},
+  spellFilter: 'all',
+  recommendCategory: 'combat',
+
+  specials: [
+    {id: uid(), name:'התקפה נוספת', max:1, used:0, reset:'long'},
+    {id: uid(), name:'זעם', max:2, used:0, reset:'long'},
+  ],
+  combo: [
+    {id: uid(), name:'התקפה 1', dice:1, die:8, mod:3, bonusDice:0, bonusDie:6, bonusOn:false, crit:false},
+  ],
+
+  diceHistory: [],
+
+  combatants: [],
+  round: 1,
+  turnIndex: 0,
+
+  resources: {
+    hpMax: 45, hpCur: 45, hpTemp: 0,
+    hdType: 10, hdTotal: 5, hdUsed: 0,
+    conMod: 2,
+  },
+
+  character: {
+    name: '',
+    className: '',
+    race: '',
+    level: 1,
+  },
+
+  gold: 0,
+  inventory: [],
+};
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function rollDie(sides){ return 1 + Math.floor(Math.random()*sides); }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function goToTab(id){ state.activeTab = id; renderTabs(); renderMain(); }
+
+/* =========================================================
+   Open5e API — מקצועות וגזעים אמיתיים (SRD), לא מוקלד ידנית
+   ========================================================= */
+const open5e = {
+  classes: [],
+  races: [],
+  status: 'loading', // 'loading' | 'ready' | 'error'
+};
+
+// גיבוי מינימלי אם אין רשת/ה-API לא זמין — עדיין רשימת המקצועות/הגזעים הרשמיים, לא בדויים
+const OPEN5E_FALLBACK_CLASSES = [
+  {name:'Barbarian', slug:'barbarian', hit_dice:'1d12', prof_saving_throws:'Strength, Constitution', spellcasting_ability:''},
+  {name:'Bard', slug:'bard', hit_dice:'1d8', prof_saving_throws:'Dexterity, Charisma', spellcasting_ability:'Charisma'},
+  {name:'Cleric', slug:'cleric', hit_dice:'1d8', prof_saving_throws:'Wisdom, Charisma', spellcasting_ability:'Wisdom'},
+  {name:'Druid', slug:'druid', hit_dice:'1d8', prof_saving_throws:'Intelligence, Wisdom', spellcasting_ability:'Wisdom'},
+  {name:'Fighter', slug:'fighter', hit_dice:'1d10', prof_saving_throws:'Strength, Constitution', spellcasting_ability:''},
+  {name:'Monk', slug:'monk', hit_dice:'1d8', prof_saving_throws:'Strength, Dexterity', spellcasting_ability:''},
+  {name:'Paladin', slug:'paladin', hit_dice:'1d10', prof_saving_throws:'Wisdom, Charisma', spellcasting_ability:'Charisma'},
+  {name:'Ranger', slug:'ranger', hit_dice:'1d10', prof_saving_throws:'Strength, Dexterity', spellcasting_ability:'Wisdom'},
+  {name:'Rogue', slug:'rogue', hit_dice:'1d8', prof_saving_throws:'Dexterity, Intelligence', spellcasting_ability:''},
+  {name:'Sorcerer', slug:'sorcerer', hit_dice:'1d6', prof_saving_throws:'Constitution, Charisma', spellcasting_ability:'Charisma'},
+  {name:'Warlock', slug:'warlock', hit_dice:'1d8', prof_saving_throws:'Wisdom, Charisma', spellcasting_ability:'Charisma'},
+  {name:'Wizard', slug:'wizard', hit_dice:'1d6', prof_saving_throws:'Intelligence, Wisdom', spellcasting_ability:'Intelligence'},
+];
+const OPEN5E_FALLBACK_RACES = [
+  {name:'Dragonborn', slug:'dragonborn', asi_desc:'Strength +2, Charisma +1', speed:{walk:30}},
+  {name:'Drow', slug:'drow', asi_desc:'Intelligence +2', speed:{walk:30}},
+  {name:'Dwarf', slug:'dwarf', asi_desc:'Constitution +2', speed:{walk:25}},
+  {name:'Elf', slug:'elf', asi_desc:'Dexterity +2', speed:{walk:30}},
+  {name:'Gnome', slug:'gnome', asi_desc:'Intelligence +2', speed:{walk:25}},
+  {name:'Half-Elf', slug:'half-elf', asi_desc:'Charisma +2, ושתי תכונות אחרות +1', speed:{walk:30}},
+  {name:'Half-Orc', slug:'half-orc', asi_desc:'Strength +2, Constitution +1', speed:{walk:30}},
+  {name:'Halfling', slug:'halfling', asi_desc:'Dexterity +2', speed:{walk:25}},
+  {name:'Human', slug:'human', asi_desc:'כל התכונות +1', speed:{walk:30}},
+  {name:'Tiefling', slug:'tiefling', asi_desc:'Intelligence +1, Charisma +2', speed:{walk:30}},
+];
+
+function hitDiceToNumber(hd){
+  const m = /d(\d+)/i.exec(hd||'');
+  return m ? parseInt(m[1],10) : 8;
+}
+
+// בונוס מיומנות רשמי לפי טבלת ה-5E (רמה 1-4: +2, 5-8: +3, 9-12: +4, 13-16: +5, 17-20: +6)
+function proficiencyBonusForLevel(level){
+  return 2 + Math.floor((clamp(level,1,20) - 1) / 4);
+}
+
+// טבלת חריצי הקסם הרשמית של Full Caster (קוסם, כומר, דרואיד וכו') לפי רמת דמות
+const FULL_CASTER_SLOT_TABLE = {
+  1:[2,0,0,0,0,0,0,0,0],   2:[3,0,0,0,0,0,0,0,0],   3:[4,2,0,0,0,0,0,0,0],
+  4:[4,3,0,0,0,0,0,0,0],   5:[4,3,2,0,0,0,0,0,0],   6:[4,3,3,0,0,0,0,0,0],
+  7:[4,3,3,1,0,0,0,0,0],   8:[4,3,3,2,0,0,0,0,0],   9:[4,3,3,3,1,0,0,0,0],
+  10:[4,3,3,3,2,0,0,0,0],  11:[4,3,3,3,2,1,0,0,0],  12:[4,3,3,3,2,1,0,0,0],
+  13:[4,3,3,3,2,1,1,0,0],  14:[4,3,3,3,2,1,1,0,0],  15:[4,3,3,3,2,1,1,1,0],
+  16:[4,3,3,3,2,1,1,1,0],  17:[4,3,3,3,2,1,1,1,1],  18:[4,3,3,3,3,1,1,1,1],
+  19:[4,3,3,3,3,2,1,1,1],  20:[4,3,3,3,3,2,2,1,1],
+};
+
+// אומדן חיים מקסימליים: קובייה מלאה ברמה 1, ממוצע הקובייה (מעוגל למעלה) לכל רמה נוספת, ועוד בונוס קונ' לכל רמה
+function estimateMaxHp(selectedClass, hdType, level, conMod){
+  const die = selectedClass ? hitDiceToNumber(selectedClass.hit_dice) : hdType;
+  const lvl = clamp(level||1, 1, 20);
+  const avgPerLevel = Math.ceil((die+1)/2);
+  return die + conMod + (lvl-1)*(avgPerLevel + conMod);
+}
+
+// מעדכן אוטומטית ערכים שנגזרים מרמת הדמות: קוביות חיים, חריצי קסם, ובונוס מיומנות
+function applyLevelDerivedStats(){
+  const c = state.character, r = state.resources;
+  const level = clamp(c.level||1, 1, 20);
+
+  r.hdTotal = level;
+
+  if(currentClassIsCaster()){
+    const row = FULL_CASTER_SLOT_TABLE[level] || FULL_CASTER_SLOT_TABLE[20];
+    row.forEach((max, i)=>{
+      const lvl = i+1;
+      state.slots[lvl].max = max;
+      state.slots[lvl].used = Math.min(state.slots[lvl].used, max);
+    });
+  }
+}
+
+async function loadOpen5eData(){
+  try{
+    const [classesRes, racesRes] = await Promise.all([
+      fetch('https://api.open5e.com/v1/classes/?fields=name,slug,hit_dice,prof_saving_throws,spellcasting_ability&limit=50'),
+      fetch('https://api.open5e.com/v1/races/?fields=name,slug,asi_desc,speed,size,vision,traits,document__slug&limit=100'),
+    ]);
+    if(!classesRes.ok || !racesRes.ok) throw new Error('open5e http error');
+    const classesData = await classesRes.json();
+    const racesData = await racesRes.json();
+
+    open5e.classes = (classesData.results || [])
+      .map(c => ({name:c.name, slug:c.slug, hit_dice:c.hit_dice, prof_saving_throws:c.prof_saving_throws, spellcasting_ability:c.spellcasting_ability||''}))
+      .sort((a,b)=>a.name.localeCompare(b.name));
+
+    // רק גזעי ה-SRD הרשמיים (מדריך השחקן הבסיסי), לא תוכן צד-שלישי
+    open5e.races = (racesData.results || [])
+      .filter(r => r.document__slug === 'wotc-srd')
+      .map(r => ({name:r.name, slug:r.slug, asi_desc:r.asi_desc, speed:r.speed, size:r.size, vision:r.vision, traits:r.traits}))
+      .sort((a,b)=>a.name.localeCompare(b.name));
+
+    if(!open5e.classes.length) open5e.classes = OPEN5E_FALLBACK_CLASSES;
+    if(!open5e.races.length) open5e.races = OPEN5E_FALLBACK_RACES;
+
+    open5e.status = 'ready';
+  }catch(err){
+    console.warn('Open5e API fetch failed, using fallback list:', err);
+    open5e.classes = OPEN5E_FALLBACK_CLASSES;
+    open5e.races = OPEN5E_FALLBACK_RACES;
+    open5e.status = 'error';
+  }
+
+  if(!state.character.className && open5e.classes.length){
+    state.character.className = (open5e.classes.find(c=>c.slug==='wizard') || open5e.classes[0]).name;
+  }
+  if(!state.character.race && open5e.races.length){
+    state.character.race = (open5e.races.find(r=>r.slug==='human') || open5e.races[0]).name;
+  }
+
+  applyLevelDerivedStats();
+  renderTabs();
+  if(!visibleTabs().find(t=>t.id===state.activeTab)) state.activeTab = 'setup';
+  renderTabs();
+  renderMain();
+}
+
+// האם המחלקה הנוכחית מטילה קסמים, לפי הנתון spellcasting_ability שמגיע מ-Open5e (לא ניחוש)
+function currentClassIsCaster(){
+  const cl = open5e.classes.find(c => c.name === state.character.className);
+  if(!cl) return true; // כל עוד לא נבחרה מחלקה, לא מסתירים כלום
+  return !!cl.spellcasting_ability;
+}
+
+/* =========================================================
+   TABS
+   ========================================================= */
+const TABS = [
+  {id:'setup', label:'הגדרת דמות', dotColor:'var(--gold)'},
+  {id:'spells', label:'לוחשות', dotColor:'var(--utility)', visible:()=>currentClassIsCaster()},
+  {id:'fighter', label:'לוחם', dotColor:'var(--combat)', visible:()=>!currentClassIsCaster()},
+  {id:'dice', label:'קוביות', dotColor:'var(--gold)'},
+  {id:'initiative', label:'יוזמה וקרב', dotColor:'var(--combat)'},
+  {id:'resources', label:'משאבים', dotColor:'var(--nature)'},
+  {id:'loot', label:'שלל וזהב', dotColor:'var(--gold)'},
+];
+
+function visibleTabs(){
+  return TABS.filter(t => !t.visible || t.visible());
+}
+
+function renderTabs(){
+  const nav = document.getElementById('tabNav');
+  nav.innerHTML = visibleTabs().map(t => `
+    <button class="tab-btn ${state.activeTab===t.id?'active':''}" data-tab="${t.id}" style="color:${state.activeTab===t.id?'':''}">
+      <span class="dot" style="background:${t.dotColor}"></span>${t.label}
+    </button>
+  `).join('');
+  nav.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{ state.activeTab = btn.dataset.tab; renderTabs(); renderMain(); });
+  });
+}
+
+function renderMain(){
+  const main = document.getElementById('mainPane');
+  const renderers = {
+    setup: renderSetupTab,
+    spells: renderSpellsTab,
+    fighter: renderFighterTab,
+    dice: renderDiceTab,
+    initiative: renderInitiativeTab,
+    resources: renderResourcesTab,
+    loot: renderLootTab,
+  };
+  main.innerHTML = `<section class="pane active" id="pane-${state.activeTab}"></section>`;
+  renderers[state.activeTab]();
+}
+
+/* =========================================================
+   0. הגדרת דמות — SETUP (קבוע, נערך פעם אחת)
+   ========================================================= */
+function renderSetupTab(){
+  const pane = document.getElementById('pane-setup');
+  const c = state.character, r = state.resources;
+
+  const classList = open5e.classes.length ? open5e.classes : OPEN5E_FALLBACK_CLASSES;
+  const raceList = open5e.races.length ? open5e.races : OPEN5E_FALLBACK_RACES;
+  const selectedClass = classList.find(cl => cl.name === c.className);
+  const selectedRace = raceList.find(rc => rc.name === c.race);
+
+  let sourceNote;
+  if(open5e.status === 'loading'){
+    sourceNote = `<span style="color:var(--utility);">טוען מקצועות וגזעים מ־Open5e API...</span>`;
+  }else if(open5e.status === 'error'){
+    sourceNote = `<span style="color:var(--combat);">לא הצלחתי להתחבר ל־Open5e API — משתמש ברשימה רשמית מקומית כגיבוי.</span>`;
+  }else{
+    sourceNote = `הרשימות נטענות בזמן אמת מ־<a href="https://api.open5e.com" target="_blank" rel="noopener" style="color:var(--gold-bright);">Open5e API</a> (מקצועות וגזעים רשמיים מ-SRD).`;
+  }
+
+  pane.innerHTML = `
+    <h2 class="pane-title">הגדרת דמות</h2>
+    <p class="pane-note">כאן קובעים פעם אחת את המספרים הקבועים של הדמות. המסכים האחרים ישתמשו בהם, ובזמן המשחק תעדכנו רק את המצב הנוכחי (חיים שנפגעו, חריצים שנוצלו וכו') — לא את הערכים המקסימליים.</p>
+    <p class="footnote" style="margin:-10px 0 20px;">${sourceNote}</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>פרטי דמות</h3>
+        <div class="row">
+          <div style="flex:2"><label class="field-label">שם הדמות</label><input type="text" id="stName" value="${esc(c.name)}" placeholder="למשל: אלריק"></div>
+          <div><label class="field-label">רמה</label><input type="number" id="stLevel" min="1" max="20" value="${c.level}"></div>
+        </div>
+        <div class="footnote" style="margin-top:8px;">בונוס מיומנות ברמה זו: <strong style="color:var(--gold-bright);">+${proficiencyBonusForLevel(c.level)}</strong> — מחושב אוטומטית ומשפיע על קוביות חיים${currentClassIsCaster()?' וחריצי קסם':''} בכל האזורים הרלוונטיים באפליקציה.</div>
+        <div class="row" style="margin-top:10px;">
+          <div>
+            <label class="field-label">מחלקה (Class)</label>
+            <select id="stClass" ${!classList.length ? 'disabled' : ''}>
+              ${classList.map(cl=>`<option value="${esc(cl.name)}" ${c.className===cl.name?'selected':''}>${esc(cl.name)}</option>`).join('')}
+            </select>
+            ${selectedClass ? `<div class="footnote" style="margin-top:6px;">קובית חיים: ד${hitDiceToNumber(selectedClass.hit_dice)}${selectedClass.prof_saving_throws?` · הצלות מיומנות: ${esc(selectedClass.prof_saving_throws)}`:''}</div>` : ''}
+            <div class="footnote" style="margin-top:4px;">${selectedClass ? (selectedClass.spellcasting_ability ? `מחלקה קסומה (${esc(selectedClass.spellcasting_ability)}) — הטאב "לוחשות" מוצג, "לוחם" מוסתר.` : `מחלקה לוחמת — הטאב "לוחם" מוצג, "לוחשות" מוסתר.`) : ''}</div>
+          </div>
+          <div>
+            <label class="field-label">גזע (Race)</label>
+            <select id="stRace" ${!raceList.length ? 'disabled' : ''}>
+              ${raceList.map(rc=>`<option value="${esc(rc.name)}" ${c.race===rc.name?'selected':''}>${esc(rc.name)}</option>`).join('')}
+            </select>
+            ${selectedRace ? `<div class="footnote" style="margin-top:6px;">${selectedRace.speed?.walk?`מהירות: ${selectedRace.speed.walk} רגל`:''}${selectedRace.asi_desc?` · ${esc(selectedRace.asi_desc.replace(/\*/g,''))}`:''}</div>` : ''}
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>חיים וקוביות חיים</h3>
+        <div class="row">
+          <div><label class="field-label">חיים מקסימליים</label><input type="number" id="stHpMax" min="1" value="${r.hpMax}"></div>
+          <div><label class="field-label">סוג קוביית חיים</label>
+            <select id="stHdType">${[6,8,10,12].map(d=>`<option value="${d}" ${r.hdType===d?'selected':''}>ד${d}</option>`).join('')}</select>
+          </div>
+          <div><label class="field-label">סה"כ קוביות חיים <small style="color:var(--ink-faint);">(= רמה)</small></label><input type="number" id="stHdTotal" min="0" value="${r.hdTotal}"></div>
+          <div><label class="field-label">בונוס קונסטיטוציה</label><input type="number" id="stConMod" value="${r.conMod}"></div>
+        </div>
+        ${selectedClass ? `<div class="footnote" style="margin-top:10px;">טיפ: לפי Open5e, קוביית החיים הרשמית של ${esc(selectedClass.name)} היא ד${hitDiceToNumber(selectedClass.hit_dice)}.
+          <button class="btn small" id="stApplyHd" style="margin-inline-start:6px;">החל</button></div>` : ''}
+        <div class="footnote" style="margin-top:6px;">
+          חיים מקסימליים משוערים לרמה ${c.level} (קובייה ממוצעת + בונוס קונ' לכל רמה): <strong style="color:var(--gold-bright);">${estimateMaxHp(selectedClass, r.hdType, c.level, r.conMod)}</strong>
+          <button class="btn small" id="stApplyHp" style="margin-inline-start:6px;">החל</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>חריצי קסם מקסימליים <small>${currentClassIsCaster() ? 'מחושב אוטומטית מהרמה (טבלת Full Caster)' : 'רלוונטי ללוחשות בלבד'}</small></h3>
+      <div class="grid3">
+        ${[1,2,3,4,5,6,7,8,9].map(lvl=>`
+          <div>
+            <label class="field-label">רמה ${lvl}</label>
+            <input type="number" min="0" max="20" data-st-slot="${lvl}" value="${state.slots[lvl].max}">
+          </div>
+        `).join('')}
+      </div>
+      ${currentClassIsCaster() ? `<div class="footnote" style="margin-top:8px;">הערכים עודכנו לפי רמת הדמות. אפשר עדיין לשנות ידנית (למשל אם המחלקה היא half/third caster).</div>` : ''}
+    </div>
+
+    <p class="footnote">השינויים נשמרים מיד. עדכון הרמה מרענן אוטומטית בונוס מיומנות, קוביות חיים וחריצי קסם.</p>
+  `;
+
+  document.getElementById('stName').addEventListener('input', e=>{ c.name = e.target.value; });
+  document.getElementById('stLevel').addEventListener('change', e=>{
+    c.level = clamp(parseInt(e.target.value,10)||1, 1, 20);
+    applyLevelDerivedStats();
+    renderSetupTab();
+  });
+  document.getElementById('stClass')?.addEventListener('change', e=>{
+    c.className = e.target.value;
+    applyLevelDerivedStats();
+    renderTabs();
+    if(!visibleTabs().find(t=>t.id===state.activeTab)) state.activeTab = 'setup';
+    renderSetupTab();
+  });
+  document.getElementById('stRace')?.addEventListener('change', e=>{ c.race = e.target.value; renderSetupTab(); });
+  document.getElementById('stApplyHd')?.addEventListener('click', ()=>{
+    if(selectedClass) r.hdType = hitDiceToNumber(selectedClass.hit_dice);
+    renderSetupTab();
+  });
+  document.getElementById('stApplyHp')?.addEventListener('click', ()=>{
+    r.hpMax = estimateMaxHp(selectedClass, r.hdType, c.level, r.conMod);
+    r.hpCur = clamp(r.hpCur, 0, r.hpMax);
+    renderSetupTab();
+  });
+
+  document.getElementById('stHpMax').addEventListener('change', e=>{
+    r.hpMax = Math.max(1, parseInt(e.target.value,10)||1);
+    r.hpCur = clamp(r.hpCur, 0, r.hpMax);
+  });
+  document.getElementById('stHdType').addEventListener('change', e=>{ r.hdType = parseInt(e.target.value,10); });
+  document.getElementById('stHdTotal').addEventListener('change', e=>{
+    r.hdTotal = clamp(parseInt(e.target.value,10)||0, 0, 30);
+    r.hdUsed = Math.min(r.hdUsed, r.hdTotal);
+  });
+  document.getElementById('stConMod').addEventListener('change', e=>{ r.conMod = parseInt(e.target.value,10)||0; });
+
+  pane.querySelectorAll('[data-st-slot]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const lvl = inp.dataset.stSlot;
+      const v = clamp(parseInt(inp.value,10)||0, 0, 20);
+      state.slots[lvl].max = v;
+      state.slots[lvl].used = Math.min(state.slots[lvl].used, v);
+    });
+  });
+}
+
+/* =========================================================
+   1. לוחשות — SPELLS
+   ========================================================= */
+function recommendCheapest(category){
+  const candidates = state.spells.filter(s => s.category === category).sort((a,b)=>a.level-b.level);
+  for(const sp of candidates){
+    if(sp.level === 0) return {spell: sp, reason:'קסם פשוט — ללא עלות בחריצים'};
+    const slot = state.slots[sp.level];
+    if(slot && slot.used < slot.max) return {spell: sp, reason:`דורש חריץ רמה ${sp.level} (נותרו ${slot.max - slot.used})`};
+  }
+  const cantrip = candidates.find(s=>s.level===0);
+  if(cantrip) return {spell: cantrip, reason:'קסם פשוט — ללא עלות בחריצים'};
+  return null;
+}
+
+function renderSpellsTab(){
+  const pane = document.getElementById('pane-spells');
+  const catLabel = {combat:'קרבי', environmental:'סביבתי', utility:'תועלתי', all:'הכול'};
+  const filtered = state.spellFilter==='all' ? state.spells : state.spells.filter(s=>s.category===state.spellFilter);
+  const rec = recommendCheapest(state.recommendCategory);
+
+  pane.innerHTML = `
+    <h2 class="pane-title">לוחשות — ניהול לחשים</h2>
+    <p class="pane-note">נהל את ספר הלחשים לפי חשיבות, עקוב אחר חריצי קסם, ומצא את הלחש הכי חסכוני למצב הנוכחי.</p>
+
+    <div class="grid2">
+      <div>
+        <div class="card">
+          <h3>ספר הלחשים</h3>
+          <div class="row">
+            <div><label class="field-label">שם הלחש</label><input type="text" id="spNewName" placeholder="למשל: כדור אש"></div>
+            <div><label class="field-label">קטגוריה</label>
+              <select id="spNewCat">
+                <option value="combat">קרבי</option>
+                <option value="environmental">סביבתי</option>
+                <option value="utility">תועלתי</option>
+              </select>
+            </div>
+            <div><label class="field-label">רמה</label>
+              <select id="spNewLevel">
+                ${[0,1,2,3,4,5,6,7,8,9].map(l=>`<option value="${l}">${l===0?'לחש פשוט':'רמה '+l}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <div style="flex:3"><label class="field-label">הערה (אופציונלי)</label><input type="text" id="spNewNote" placeholder="נזק, טווח, אפקט..."></div>
+            <div style="flex:1; min-width:110px;"><button class="btn gold" id="spAddBtn" style="width:100%;">הוסף לחש</button></div>
+          </div>
+
+          <div class="chip-row" style="margin-top:16px;">
+            ${['all','combat','environmental','utility'].map(c=>`<div class="chip" data-cat="${c}">${catLabel[c]}</div>`).join('')}
+          </div>
+
+          <div id="spellList">
+            ${filtered.length ? filtered.map(s=>`
+              <div class="spell-item cat-${s.category}">
+                <span class="lvl">${s.level===0?'פשוט':'רמה '+s.level}</span>
+                <span class="name">${esc(s.name)}</span>
+                <span class="note">${esc(s.note||'')}</span>
+                <button class="icon-btn" data-del-spell="${s.id}" title="מחק" aria-label="מחק">✕</button>
+              </div>
+            `).join('') : `<div class="empty-state">אין לחשים בקטגוריה זו עדיין.</div>`}
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>חריצי קסם <small>לחצו על משבצת כדי לסמן שימוש</small></h3>
+          ${[1,2,3,4,5,6,7,8,9].map(lvl=>{
+            const s = state.slots[lvl];
+            let pips = '';
+            for(let i=0;i<s.max;i++){ pips += `<div class="pip ${i<s.used?'used':''}" data-slot-lvl="${lvl}" data-slot-idx="${i}"></div>`; }
+            return `<div class="slot-row">
+              <span class="lvl-label">רמה ${lvl}</span>
+              <div class="slot-pips">${pips || '<span style="color:var(--ink-faint);font-size:12px;">—</span>'}</div>
+              <span style="font-family:var(--font-mono); font-size:12px; color:var(--ink-faint); width:30px; text-align:left;">/${s.max}</span>
+            </div>`;
+          }).join('')}
+          <div class="row" style="margin-top:10px;">
+            <button class="btn success" id="longRestSlots" style="flex:1;">מנוחה ארוכה — איפוס חריצים</button>
+          </div>
+          <p class="footnote">כדי לשנות את הכמות המקסימלית של החריצים (למשל אחרי עליית רמה), עברו ל<a href="#" id="goSetupSlots" style="color:var(--gold-bright);">הגדרת דמות</a>.</p>
+        </div>
+
+        <div class="card">
+          <h3>הלחש הכי חסכוני</h3>
+          <label class="field-label">מצב נוכחי</label>
+          <select id="recCat">
+            <option value="combat">קרבי — צריך לפגוע</option>
+            <option value="environmental">סביבתי — צריך לשנות את הסביבה</option>
+            <option value="utility">תועלתי — צריך פתרון חכם</option>
+          </select>
+          ${rec ? `
+            <div class="recommend-box">
+              <div class="title">מומלץ להטיל עכשיו:</div>
+              <div class="spell-name">${esc(rec.spell.name)}</div>
+              <div class="spell-meta">${rec.reason}${rec.spell.note ? ' · '+esc(rec.spell.note) : ''}</div>
+            </div>
+          ` : `<div class="empty-state">אין לחש זמין בקטגוריה זו כרגע (או שאין חריצים פנויים).</div>`}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('recCat').value = state.recommendCategory;
+  document.getElementById('recCat').addEventListener('change', e=>{ state.recommendCategory = e.target.value; renderSpellsTab(); });
+
+  pane.querySelectorAll('.chip').forEach(chip=>{
+    if(chip.dataset.cat === state.spellFilter) chip.classList.add('active');
+    chip.addEventListener('click', ()=>{ state.spellFilter = chip.dataset.cat; renderSpellsTab(); });
+  });
+
+  document.getElementById('spAddBtn').addEventListener('click', ()=>{
+    const name = document.getElementById('spNewName').value.trim();
+    if(!name) return;
+    state.spells.push({
+      id: uid(),
+      name,
+      category: document.getElementById('spNewCat').value,
+      level: parseInt(document.getElementById('spNewLevel').value,10),
+      note: document.getElementById('spNewNote').value.trim(),
+    });
+    renderSpellsTab();
+  });
+
+  pane.querySelectorAll('[data-del-spell]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      state.spells = state.spells.filter(s=>s.id !== b.dataset.delSpell);
+      renderSpellsTab();
+    });
+  });
+
+  document.getElementById('goSetupSlots').addEventListener('click', (e)=>{ e.preventDefault(); goToTab('setup'); });
+
+  pane.querySelectorAll('[data-slot-lvl]').forEach(pip=>{
+    pip.addEventListener('click', ()=>{
+      const lvl = pip.dataset.slotLvl, idx = parseInt(pip.dataset.slotIdx,10);
+      const s = state.slots[lvl];
+      s.used = (idx < s.used) ? idx : idx+1;
+      s.used = clamp(s.used, 0, s.max);
+      renderSpellsTab();
+    });
+  });
+
+  document.getElementById('longRestSlots').addEventListener('click', ()=>{
+    Object.values(state.slots).forEach(s=> s.used = 0);
+    renderSpellsTab();
+  });
+}
+
+/* =========================================================
+   2. לוחם — FIGHTER
+   ========================================================= */
+function attackAverage(a){
+  const dieAvg = (a.die+1)/2;
+  let base = a.dice*dieAvg + Number(a.mod||0);
+  if(a.crit) base = a.dice*2*dieAvg + Number(a.mod||0);
+  let bonus = 0;
+  if(a.bonusOn && a.bonusDice>0){
+    const bDieAvg = (a.bonusDie+1)/2;
+    bonus = a.crit ? a.bonusDice*2*bDieAvg : a.bonusDice*bDieAvg;
+  }
+  return base + bonus;
+}
+function attackRoll(a){
+  let total = 0;
+  const rounds = a.crit ? 2 : 1;
+  for(let r=0;r<rounds;r++) for(let i=0;i<a.dice;i++) total += rollDie(a.die);
+  total += Number(a.mod||0);
+  if(a.bonusOn && a.bonusDice>0){
+    const brounds = a.crit ? 2 : 1;
+    for(let r=0;r<brounds;r++) for(let i=0;i<a.bonusDice;i++) total += rollDie(a.bonusDie);
+  }
+  return total;
+}
+
+function renderFighterTab(){
+  const pane = document.getElementById('pane-fighter');
+
+  pane.innerHTML = `
+    <h2 class="pane-title">לוחם — ספיישלים וקרב מגע</h2>
+    <p class="pane-note">עקוב אחרי יכולות מיוחדות, חשב פגיעות קריטיות, ותכנן שילובי התקפה בסיבוב אחד.</p>
+
+    <div class="grid2">
+      <div>
+        <div class="card">
+          <h3>ספיישלים <small>יכולות מוגבלות שימוש</small></h3>
+          <div class="row">
+            <div style="flex:2"><label class="field-label">שם היכולת</label><input type="text" id="spcName" placeholder="למשל: התקפה שנייה"></div>
+            <div><label class="field-label">שימושים</label><input type="number" id="spcMax" min="1" value="1"></div>
+            <div><label class="field-label">מתאפס ב</label>
+              <select id="spcReset"><option value="short">מנוחה קצרה</option><option value="long">מנוחה ארוכה</option></select>
+            </div>
+            <div><button class="btn gold" id="spcAdd">הוסף</button></div>
+          </div>
+          <div id="specialsList" style="margin-top:14px;">
+            ${state.specials.length ? state.specials.map(sp=>{
+              let pips=''; for(let i=0;i<sp.max;i++) pips += `<div class="use-pip ${i<sp.used?'spent':''}"></div>`;
+              return `<div class="list-item">
+                <span class="grow"><strong>${esc(sp.name)}</strong> <span class="badge ${sp.reset}">${sp.reset==='short'?'קצרה':'ארוכה'}</span></span>
+                <div class="uses-track">${pips}</div>
+                <button class="btn small" data-use-special="${sp.id}" ${sp.used>=sp.max?'disabled':''}>השתמש</button>
+                <button class="icon-btn" data-del-special="${sp.id}">✕</button>
+              </div>`;
+            }).join('') : `<div class="empty-state">עדיין לא נוספו יכולות.</div>`}
+          </div>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="shortRestSpecials" style="flex:1;">מנוחה קצרה</button>
+            <button class="btn success" id="longRestSpecials" style="flex:1;">מנוחה ארוכה</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card">
+          <h3>מחשבון פגיעה קריטית</h3>
+          <div class="row">
+            <div><label class="field-label">מס' קוביות</label><input type="number" id="critDice" min="1" value="2"></div>
+            <div><label class="field-label">סוג קובייה</label>
+              <select id="critDie">
+                ${[4,6,8,10,12].map(d=>`<option value="${d}">ד${d}</option>`).join('')}
+              </select>
+            </div>
+            <div><label class="field-label">בונוס קבוע</label><input type="number" id="critMod" value="3"></div>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <div><label class="field-label">קוביות קריטי נוספות (כמו Brutal Critical)</label><input type="number" id="critExtra" min="0" value="0"></div>
+            <div><button class="btn gold" id="critCalc" style="width:100%;">חשב</button></div>
+          </div>
+          <div id="critResult"></div>
+        </div>
+
+        <div class="card">
+          <h3>בונוסים מהתקפות משולבות</h3>
+          <div id="comboList"></div>
+          <button class="btn" id="comboAdd" style="margin-top:4px;">+ הוסף התקפה</button>
+          <div class="row" style="margin-top:10px;">
+            <button class="btn gold" id="comboCalc" style="flex:1;">חשב סיבוב שלם</button>
+          </div>
+          <div id="comboResult"></div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('spcAdd').addEventListener('click', ()=>{
+    const name = document.getElementById('spcName').value.trim();
+    if(!name) return;
+    state.specials.push({id:uid(), name, max: parseInt(document.getElementById('spcMax').value,10)||1, used:0, reset: document.getElementById('spcReset').value});
+    renderFighterTab();
+  });
+  pane.querySelectorAll('[data-use-special]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const sp = state.specials.find(s=>s.id===b.dataset.useSpecial);
+      if(sp && sp.used < sp.max) sp.used++;
+      renderFighterTab();
+    });
+  });
+  pane.querySelectorAll('[data-del-special]').forEach(b=>{
+    b.addEventListener('click', ()=>{ state.specials = state.specials.filter(s=>s.id!==b.dataset.delSpecial); renderFighterTab(); });
+  });
+  document.getElementById('shortRestSpecials').addEventListener('click', ()=>{
+    state.specials.forEach(s=>{ if(s.reset==='short') s.used=0; }); renderFighterTab();
+  });
+  document.getElementById('longRestSpecials').addEventListener('click', ()=>{
+    state.specials.forEach(s=> s.used=0); renderFighterTab();
+  });
+
+  document.getElementById('critCalc').addEventListener('click', ()=>{
+    const dice = parseInt(document.getElementById('critDice').value,10)||1;
+    const die = parseInt(document.getElementById('critDie').value,10);
+    const mod = parseInt(document.getElementById('critMod').value,10)||0;
+    const extra = parseInt(document.getElementById('critExtra').value,10)||0;
+    const dieAvg = (die+1)/2;
+    const normalAvg = dice*dieAvg + mod;
+    const critAvg = (dice*2 + extra)*dieAvg + mod;
+    let rollTotal = mod;
+    for(let i=0;i<dice*2+extra;i++) rollTotal += rollDie(die);
+    document.getElementById('critResult').innerHTML = `
+      <div class="result-box">
+        <div class="stat"><div class="num">${normalAvg.toFixed(1)}</div><div class="lbl">ממוצע רגיל</div></div>
+        <div class="stat"><div class="num">${critAvg.toFixed(1)}</div><div class="lbl">ממוצע קריטי</div></div>
+        <div class="stat"><div class="num">${rollTotal}</div><div class="lbl">הטלה בפועל (קריטי)</div></div>
+      </div>`;
+  });
+
+  renderComboList();
+  document.getElementById('comboAdd').addEventListener('click', ()=>{
+    state.combo.push({id:uid(), name:`התקפה ${state.combo.length+1}`, dice:1, die:8, mod:3, bonusDice:0, bonusDie:6, bonusOn:false, crit:false});
+    renderComboList();
+  });
+  document.getElementById('comboCalc').addEventListener('click', ()=>{
+    let totalAvg = 0, totalRoll = 0;
+    const rows = state.combo.map(a=>{
+      const avg = attackAverage(a);
+      const roll = attackRoll(a);
+      totalAvg += avg; totalRoll += roll;
+      return `<tr><td>${esc(a.name)}</td><td>${avg.toFixed(1)}</td><td>${roll}</td></tr>`;
+    }).join('');
+    document.getElementById('comboResult').innerHTML = `
+      <table class="simple" style="margin-top:10px;">
+        <tr><th>התקפה</th><th>ממוצע</th><th>הטלה</th></tr>
+        ${rows}
+      </table>
+      <div class="result-box">
+        <div class="stat"><div class="num">${totalAvg.toFixed(1)}</div><div class="lbl">סה"כ ממוצע לסיבוב</div></div>
+        <div class="stat"><div class="num">${totalRoll}</div><div class="lbl">סה"כ בפועל</div></div>
+      </div>`;
+  });
+}
+
+function renderComboList(){
+  const wrap = document.getElementById('comboList');
+  wrap.innerHTML = state.combo.map(a=>`
+    <div class="attack-row" data-combo-id="${a.id}">
+      <div class="row tight">
+        <div><label class="field-label">שם</label><input type="text" data-field="name" value="${esc(a.name)}"></div>
+        <div><label class="field-label">קוביות</label><input type="number" data-field="dice" min="0" value="${a.dice}"></div>
+        <div><label class="field-label">ד</label>
+          <select data-field="die">${[4,6,8,10,12].map(d=>`<option value="${d}" ${a.die===d?'selected':''}>ד${d}</option>`).join('')}</select>
+        </div>
+        <div><label class="field-label">בונוס</label><input type="number" data-field="mod" value="${a.mod}"></div>
+      </div>
+      <div class="row tight">
+        <div style="flex:0 0 auto;"><label class="field-label">בונוס חד-פעמי (חבטת גניבה וכו')</label>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+            <input type="checkbox" data-field="bonusOn" ${a.bonusOn?'checked':''}> פעיל
+          </label>
+        </div>
+        <div><label class="field-label">קוביות בונוס</label><input type="number" data-field="bonusDice" min="0" value="${a.bonusDice}"></div>
+        <div><label class="field-label">ד בונוס</label>
+          <select data-field="bonusDie">${[4,6,8,10,12].map(d=>`<option value="${d}" ${a.bonusDie===d?'selected':''}>ד${d}</option>`).join('')}</select>
+        </div>
+        <div><label class="field-label">קריטי</label>
+          <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+            <input type="checkbox" data-field="crit" ${a.crit?'checked':''}> כפול
+          </label>
+        </div>
+        <div style="flex:0 0 auto;"><button class="icon-btn" data-del-combo="${a.id}">✕</button></div>
+      </div>
+      <div class="avg">ממוצע: ${attackAverage(a).toFixed(1)}</div>
+    </div>
+  `).join('') || `<div class="empty-state">אין התקפות עדיין.</div>`;
+
+  wrap.querySelectorAll('.attack-row').forEach(row=>{
+    const id = row.dataset.comboId;
+    const a = state.combo.find(x=>x.id===id);
+    row.querySelectorAll('[data-field]').forEach(inp=>{
+      const field = inp.dataset.field;
+      const handler = ()=>{
+        if(inp.type==='checkbox') a[field] = inp.checked;
+        else if(field==='name') a[field] = inp.value;
+        else a[field] = field==='die'||field==='bonusDie' ? parseInt(inp.value,10) : (parseFloat(inp.value)||0);
+        renderComboList();
+      };
+      inp.addEventListener('change', handler);
+    });
+    row.querySelector('[data-del-combo]').addEventListener('click', ()=>{
+      state.combo = state.combo.filter(x=>x.id!==id);
+      renderComboList();
+    });
+  });
+}
+
+/* =========================================================
+   3. סימולטור קוביות
+   ========================================================= */
+function renderDiceTab(){
+  const pane = document.getElementById('pane-dice');
+  pane.innerHTML = `
+    <h2 class="pane-title">סימולטור קוביות</h2>
+    <p class="pane-note">הטלה מדויקת עם יתרון / חיסרון ובונוסים, כולל ממוצע תאורטי וממוצע מדומה על אלפי הטלות.</p>
+
+    <div class="card">
+      <div class="row">
+        <div><label class="field-label">מס' קוביות</label><input type="number" id="dxCount" min="1" value="1"></div>
+        <div><label class="field-label">סוג קובייה</label>
+          <select id="dxSide">
+            ${[4,6,8,10,12,20,100].map(d=>`<option value="${d}" ${d===20?'selected':''}>ד${d}</option>`).join('')}
+          </select>
+        </div>
+        <div><label class="field-label">בונוס קבוע</label><input type="number" id="dxMod" value="0"></div>
+        <div><label class="field-label">מצב</label>
+          <select id="dxMode">
+            <option value="normal">רגיל</option>
+            <option value="adv">יתרון (Advantage)</option>
+            <option value="dis">חיסרון (Disadvantage)</option>
+          </select>
+        </div>
+        <div><button class="btn gold" id="dxRoll" style="width:100%;">הטל עכשיו</button></div>
+      </div>
+
+      <div class="dice-tray" id="diceTray"></div>
+      <div id="dxResultBox"></div>
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn" id="dxSimulate" style="flex:1;">הרץ 20,000 סימולציות וחשב ממוצעים</button>
+      </div>
+      <div id="dxSimResult"></div>
+    </div>
+  `;
+
+  document.getElementById('dxRoll').addEventListener('click', doDiceRoll);
+  document.getElementById('dxSimulate').addEventListener('click', doSimulate);
+}
+
+function readDiceInputs(){
+  return {
+    count: parseInt(document.getElementById('dxCount').value,10)||1,
+    side: parseInt(document.getElementById('dxSide').value,10),
+    mod: parseInt(document.getElementById('dxMod').value,10)||0,
+    mode: document.getElementById('dxMode').value,
+  };
+}
+
+function rollExpression(count, side){
+  let vals=[]; for(let i=0;i<count;i++) vals.push(rollDie(side));
+  return vals;
+}
+
+function doDiceRoll(){
+  const {count, side, mod, mode} = readDiceInputs();
+  let vals, total, altVals=null, altTotal=null, chosen;
+  vals = rollExpression(count, side); total = vals.reduce((a,b)=>a+b,0) + mod;
+  if(mode !== 'normal'){
+    altVals = rollExpression(count, side); altTotal = altVals.reduce((a,b)=>a+b,0) + mod;
+    if(mode==='adv') chosen = total >= altTotal ? {vals,total} : {vals:altVals,total:altTotal};
+    else chosen = total <= altTotal ? {vals,total} : {vals:altVals,total:altTotal};
+  } else {
+    chosen = {vals, total};
+  }
+
+  const tray = document.getElementById('diceTray');
+  tray.innerHTML = chosen.vals.map(v=>`<div class="die-face rolling">${v}</div>`).join('') +
+    (mod ? `<div class="die-face" style="border-color:var(--gold-dim);color:var(--gold-bright);">${mod>0?'+':''}${mod}</div>` : '');
+
+  let extra = '';
+  if(mode !== 'normal'){
+    extra = `<div class="footnote">הטלה חלופית (${mode==='adv'?'לא נבחרה כי נמוכה יותר':'לא נבחרה כי גבוהה יותר'}): ${altVals.join(', ')} ${mod?`(+${mod})`:''} = ${altTotal}</div>`;
+  }
+
+  document.getElementById('dxResultBox').innerHTML = `
+    <div class="result-box">
+      <div class="stat"><div class="num">${chosen.total}</div><div class="lbl">תוצאה סופית</div></div>
+      <div class="stat"><div class="num" style="font-size:15px; color:var(--ink-dim);">${chosen.vals.join(' + ')}${mod?` + ${mod}`:''}</div><div class="lbl">פירוט</div></div>
+    </div>
+    ${extra}
+  `;
+
+  state.diceHistory.unshift({count,side,mod,mode,total:chosen.total});
+  state.diceHistory = state.diceHistory.slice(0,10);
+}
+
+function doSimulate(){
+  const {count, side, mod, mode} = readDiceInputs();
+  const trials = 20000;
+  let sum = 0; const freq = {};
+  for(let t=0;t<trials;t++){
+    let total = rollExpression(count,side).reduce((a,b)=>a+b,0) + mod;
+    if(mode !== 'normal'){
+      const alt = rollExpression(count,side).reduce((a,b)=>a+b,0) + mod;
+      total = mode==='adv' ? Math.max(total,alt) : Math.min(total,alt);
+    }
+    sum += total;
+    freq[total] = (freq[total]||0)+1;
+  }
+  const simAvg = sum/trials;
+  const theoAvg = count*(side+1)/2 + mod;
+
+  const totals = Object.keys(freq).map(Number).sort((a,b)=>a-b);
+  const maxFreq = Math.max(...Object.values(freq));
+  const step = Math.max(1, Math.ceil(totals.length/22));
+  let histHtml = '';
+  for(let i=0;i<totals.length;i+=step){
+    const v = totals[i];
+    const c = freq[v];
+    histHtml += `<div class="hist-bar-row">
+      <div class="hist-label">${v}</div>
+      <div class="hist-track"><div class="hist-fill" style="width:${(c/maxFreq*100).toFixed(1)}%"></div></div>
+      <div class="hist-count">${(c/trials*100).toFixed(1)}%</div>
+    </div>`;
+  }
+
+  document.getElementById('dxSimResult').innerHTML = `
+    <div class="result-box">
+      <div class="stat"><div class="num">${theoAvg.toFixed(2)}</div><div class="lbl">ממוצע תאורטי (מצב רגיל)</div></div>
+      <div class="stat"><div class="num">${simAvg.toFixed(2)}</div><div class="lbl">ממוצע מדומה (${mode==='normal'?'רגיל':mode==='adv'?'יתרון':'חיסרון'}, ${trials.toLocaleString()} הטלות)</div></div>
+    </div>
+    <div style="margin-top:12px;">${histHtml}</div>
+    <div class="footnote">ההפרש בין הממוצע התאורטי לממוצע במצב יתרון/חיסרון נובע מבחירת הטובה/הגרועה מבין שתי הטלות מלאות.</div>
+  `;
+}
+
+/* =========================================================
+   4. יוזמה וקרב
+   ========================================================= */
+function renderInitiativeTab(){
+  const pane = document.getElementById('pane-initiative');
+  const sorted = [...state.combatants].sort((a,b)=>b.initiative-a.initiative);
+
+  pane.innerHTML = `
+    <h2 class="pane-title">יוזמה וקרב</h2>
+    <p class="pane-note">הוסיפו לוחמים ואויבים, סדרו לפי יוזמה ועקבו אחרי תורות ונקודות פגיעה.</p>
+
+    <div class="card">
+      <div class="row">
+        <div><label class="field-label">שם</label><input type="text" id="cbName" placeholder="למשל: אורק #1"></div>
+        <div><label class="field-label">יוזמה</label><input type="number" id="cbInit" value="10"></div>
+        <div><label class="field-label">חיים מקסימליים</label><input type="number" id="cbHp" value="20"></div>
+        <div><label class="field-label">צד</label>
+          <select id="cbSide"><option value="ally">בעלי ברית</option><option value="enemy">אויב</option></select>
+        </div>
+        <div><button class="btn gold" id="cbAdd" style="width:100%;">הוסף</button></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <span class="round-badge">סיבוב ${state.round}</span>
+        <div class="row" style="margin:0; gap:8px;">
+          <button class="btn" id="cbReset">איפוס תור</button>
+          <button class="btn gold" id="cbNext">הבא בתור ←</button>
+        </div>
+      </div>
+      <div id="combatantList">
+        ${sorted.length ? sorted.map((c,i)=>{
+          const pct = clamp(c.hp/c.maxHp*100,0,100);
+          return `<div class="combatant ${i===state.turnIndex?'active-turn':''} ${c.hp<=0?'dead':''}">
+            <div class="init-num">${c.initiative}</div>
+            <span class="cname ${c.side}">${esc(c.name)}</span>
+            <div class="hp-bar-wrap">
+              <div class="hp-bar"><div class="hp-bar-fill" style="width:${pct}%; background:${c.side==='enemy'?'var(--combat)':'var(--nature)'}"></div></div>
+              <div class="hp-text">${c.hp} / ${c.maxHp}</div>
+            </div>
+            <button class="btn small" data-dmg="${c.id}">-5</button>
+            <button class="btn small success" data-heal="${c.id}">+5</button>
+            <button class="icon-btn" data-del-cb="${c.id}">✕</button>
+          </div>`;
+        }).join('') : `<div class="empty-state">אין משתתפים בקרב עדיין.</div>`}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('cbAdd').addEventListener('click', ()=>{
+    const name = document.getElementById('cbName').value.trim();
+    if(!name) return;
+    const maxHp = parseInt(document.getElementById('cbHp').value,10)||1;
+    state.combatants.push({
+      id: uid(), name,
+      initiative: parseInt(document.getElementById('cbInit').value,10)||0,
+      hp: maxHp, maxHp,
+      side: document.getElementById('cbSide').value,
+    });
+    renderInitiativeTab();
+  });
+
+  pane.querySelectorAll('[data-dmg]').forEach(b=>b.addEventListener('click', ()=>{
+    const c = state.combatants.find(x=>x.id===b.dataset.dmg); c.hp = clamp(c.hp-5,0,c.maxHp); renderInitiativeTab();
+  }));
+  pane.querySelectorAll('[data-heal]').forEach(b=>b.addEventListener('click', ()=>{
+    const c = state.combatants.find(x=>x.id===b.dataset.heal); c.hp = clamp(c.hp+5,0,c.maxHp); renderInitiativeTab();
+  }));
+  pane.querySelectorAll('[data-del-cb]').forEach(b=>b.addEventListener('click', ()=>{
+    state.combatants = state.combatants.filter(x=>x.id!==b.dataset.delCb);
+    state.turnIndex = 0;
+    renderInitiativeTab();
+  }));
+
+  document.getElementById('cbNext').addEventListener('click', ()=>{
+    if(!state.combatants.length) return;
+    state.turnIndex++;
+    if(state.turnIndex >= state.combatants.length){ state.turnIndex = 0; state.round++; }
+    renderInitiativeTab();
+  });
+  document.getElementById('cbReset').addEventListener('click', ()=>{
+    state.turnIndex = 0; state.round = 1; renderInitiativeTab();
+  });
+}
+
+/* =========================================================
+   5. משאבים — HP / חיזוק / קוביות חיים
+   ========================================================= */
+function renderResourcesTab(){
+  const pane = document.getElementById('pane-resources');
+  const r = state.resources;
+  const hpPct = clamp(r.hpCur/r.hpMax*100,0,100);
+
+  let hdPips=''; for(let i=0;i<r.hdTotal;i++) hdPips += `<div class="hd-pip ${i<r.hdUsed?'used':''}">ד${r.hdType}</div>`;
+
+  pane.innerHTML = `
+    <h2 class="pane-title">משאבי דמות ${state.character.name?'— '+esc(state.character.name):''}</h2>
+    <p class="pane-note">עקוב אחרי נקודות חיים, חיזוק זמני וקוביות חיים למנוחה קצרה. הערכים הקבועים (חיים מקסימליים, סוג וכמות קוביות חיים) נקבעים ב<a href="#" id="goSetupTop" style="color:var(--gold-bright);">הגדרת דמות</a>.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>נקודות חיים</h3>
+        <div class="resource-bar-big"><div class="resource-bar-big-fill" style="width:${hpPct}%; background:var(--nature);"></div></div>
+        <div style="display:flex; justify-content:space-between; margin:8px 0 14px; font-family:var(--font-mono);">
+          <span>${r.hpCur} / ${r.hpMax}</span>
+          <span style="color:var(--utility);">חיזוק זמני: ${r.hpTemp}</span>
+        </div>
+        <div class="row">
+          <div><label class="field-label">כמות</label><input type="number" id="rHpAmount" value="5" min="0"></div>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn danger" id="rDamage" style="flex:1;">פגיעה</button>
+          <button class="btn success" id="rHeal" style="flex:1;">ריפוי</button>
+        </div>
+        <div class="row" style="margin-top:8px;">
+          <div><label class="field-label">הוסף חיזוק זמני</label><input type="number" id="rTempAmount" value="5"></div>
+          <div><button class="btn" id="rAddTemp" style="width:100%;">הוסף</button></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>קוביות חיים <small>למנוחה קצרה · ד${r.hdType}, בונוס קונ' ${r.conMod>=0?'+':''}${r.conMod}</small></h3>
+        <div class="hd-pips" style="margin:8px 0 14px;">${hdPips || '<span style="color:var(--ink-faint)">—</span>'}</div>
+        <div class="row">
+          <button class="btn gold" id="rUseHd" style="width:100%;">בזבז קוביית חיים לריפוי</button>
+        </div>
+        <div id="rHdResult"></div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn" id="rShortRest" style="flex:1;">מנוחה קצרה</button>
+          <button class="btn success" id="rLongRest" style="flex:1;">מנוחה ארוכה — איפוס מלא</button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('goSetupTop').addEventListener('click', (e)=>{ e.preventDefault(); goToTab('setup'); });
+
+  document.getElementById('rDamage').addEventListener('click', ()=>{
+    let amt = parseInt(document.getElementById('rHpAmount').value,10)||0;
+    if(r.hpTemp>0){ const used = Math.min(r.hpTemp, amt); r.hpTemp -= used; amt -= used; }
+    r.hpCur = clamp(r.hpCur-amt,0,r.hpMax); renderResourcesTab();
+  });
+  document.getElementById('rHeal').addEventListener('click', ()=>{
+    const amt = parseInt(document.getElementById('rHpAmount').value,10)||0;
+    r.hpCur = clamp(r.hpCur+amt,0,r.hpMax); renderResourcesTab();
+  });
+  document.getElementById('rAddTemp').addEventListener('click', ()=>{
+    const amt = parseInt(document.getElementById('rTempAmount').value,10)||0;
+    r.hpTemp = Math.max(r.hpTemp, amt); renderResourcesTab();
+  });
+  document.getElementById('rUseHd').addEventListener('click', ()=>{
+    if(r.hdUsed >= r.hdTotal){ document.getElementById('rHdResult').innerHTML = `<div class="footnote">אין קוביות חיים זמינות.</div>`; return; }
+    const roll = rollDie(r.hdType) + r.conMod;
+    r.hdUsed++;
+    r.hpCur = clamp(r.hpCur+roll,0,r.hpMax);
+    document.getElementById('rHdResult').innerHTML = `<div class="footnote">הוטל ד${r.hdType} + ${r.conMod} = ${roll} נקודות חיים הוחזרו.</div>`;
+    renderResourcesTab();
+  });
+  document.getElementById('rShortRest').addEventListener('click', ()=>{ renderResourcesTab(); });
+  document.getElementById('rLongRest').addEventListener('click', ()=>{
+    r.hpCur = r.hpMax; r.hpTemp = 0;
+    r.hdUsed = Math.max(0, r.hdUsed - Math.ceil(r.hdTotal/2));
+    renderResourcesTab();
+  });
+}
+
+/* =========================================================
+   6. שלל וזהב
+   ========================================================= */
+function renderLootTab(){
+  const pane = document.getElementById('pane-loot');
+  const invValue = state.inventory.reduce((s,i)=>s+i.value*i.qty,0);
+  const totalWealth = state.gold + invValue;
+
+  pane.innerHTML = `
+    <h2 class="pane-title">שלל וזהב</h2>
+    <p class="pane-note">נהל את ארנק הדמות ואת פריטי השלל שנאספו — כולל מכירה מהירה תמורת זהב.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>ארנק <small>עושר כולל (זהב + שלל): ${totalWealth} ז"ז</small></h3>
+        <div style="font-family:var(--font-mono); font-size:32px; color:var(--gold-bright); margin-bottom:14px;">${state.gold} ז"ז</div>
+        <div class="row">
+          <div><label class="field-label">כמות</label><input type="number" id="gdAmount" value="10" min="0"></div>
+          <div><button class="btn danger" id="gdSpend" style="width:100%;">הוצא</button></div>
+          <div><button class="btn success" id="gdAdd" style="width:100%;">קבל</button></div>
+        </div>
+        <div class="footnote">שווי הפריטים בתרמיל: ${invValue} ז"ז</div>
+      </div>
+
+      <div class="card">
+        <h3>תרמיל השלל</h3>
+        <div class="row">
+          <div style="flex:2"><label class="field-label">שם הפריט</label><input type="text" id="ltName" placeholder="למשל: חרב קסומה"></div>
+          <div><label class="field-label">כמות</label><input type="number" id="ltQty" value="1" min="1"></div>
+          <div><label class="field-label">שווי ליחידה</label><input type="number" id="ltValue" value="0"></div>
+          <div><button class="btn gold" id="ltAdd" style="width:100%;">הוסף</button></div>
+        </div>
+        <div style="margin-top:12px;">
+          ${state.inventory.length ? state.inventory.map(i=>`
+            <div class="loot-item">
+              <span class="grow">${esc(i.name)} ${i.qty>1?`<span style="color:var(--ink-faint)">×${i.qty}</span>`:''}</span>
+              <span style="font-family:var(--font-mono); color:var(--gold-bright);">${i.value} ז"ז ליח'</span>
+              <button class="btn small gold" data-sell="${i.id}">מכור הכול</button>
+              <button class="icon-btn" data-del-loot="${i.id}">✕</button>
+            </div>
+          `).join('') : `<div class="empty-state">התרמיל ריק.</div>`}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('gdAdd').addEventListener('click', ()=>{
+    state.gold += parseInt(document.getElementById('gdAmount').value,10)||0; renderLootTab();
+  });
+  document.getElementById('gdSpend').addEventListener('click', ()=>{
+    const amt = parseInt(document.getElementById('gdAmount').value,10)||0;
+    state.gold = Math.max(0, state.gold-amt); renderLootTab();
+  });
+
+  document.getElementById('ltAdd').addEventListener('click', ()=>{
+    const name = document.getElementById('ltName').value.trim();
+    if(!name) return;
+    state.inventory.push({
+      id: uid(), name,
+      qty: parseInt(document.getElementById('ltQty').value,10)||1,
+      value: parseInt(document.getElementById('ltValue').value,10)||0,
+    });
+    renderLootTab();
+  });
+  pane.querySelectorAll('[data-del-loot]').forEach(b=>b.addEventListener('click', ()=>{
+    state.inventory = state.inventory.filter(i=>i.id!==b.dataset.delLoot); renderLootTab();
+  }));
+  pane.querySelectorAll('[data-sell]').forEach(b=>b.addEventListener('click', ()=>{
+    const item = state.inventory.find(i=>i.id===b.dataset.sell);
+    if(!item) return;
+    state.gold += item.value*item.qty;
+    state.inventory = state.inventory.filter(i=>i.id!==item.id);
+    renderLootTab();
+  }));
+}
+
+/* =========================================================
+   INIT
+   ========================================================= */
+applyLevelDerivedStats();
+renderTabs();
+renderMain();
+loadOpen5eData();
+</script>
+</body>
+</html>
