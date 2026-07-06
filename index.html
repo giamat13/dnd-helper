@@ -391,6 +391,8 @@ const state = {
   },
 
   gold: 0,
+  silver: 0,
+  copper: 0,
   inventory: [],
 };
 
@@ -586,6 +588,20 @@ function renderMain(){
   };
   main.innerHTML = `<section class="pane active" id="pane-${state.activeTab}"></section>`;
   renderers[state.activeTab]();
+  saveState();
+}
+
+const STORAGE_KEY = 'dnd-helper-state';
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return;
+    const saved = JSON.parse(raw);
+    Object.assign(state, saved);
+  }catch(e){}
 }
 
 /* =========================================================
@@ -1270,7 +1286,8 @@ function renderResourcesTab(){
 function renderLootTab(){
   const pane = document.getElementById('pane-loot');
   const invValue = state.inventory.reduce((s,i)=>s+i.value*i.qty,0);
-  const totalWealth = state.gold + invValue;
+  const coinValueInGold = state.gold + state.silver/10 + state.copper/100;
+  const totalWealth = coinValueInGold + invValue;
 
   pane.innerHTML = `
     <h2 class="pane-title">שלל וזהב</h2>
@@ -1278,9 +1295,29 @@ function renderLootTab(){
 
     <div class="grid2">
       <div class="card">
-        <h3>ארנק <small>עושר כולל (זהב + שלל): ${totalWealth} ז"ז</small></h3>
-        <div style="font-family:var(--font-mono); font-size:32px; color:var(--gold-bright); margin-bottom:14px;">${state.gold} ז"ז</div>
+        <h3>ארנק <small>עושר כולל (מטבעות + שלל): ${totalWealth.toFixed(2)} ז"ז</small></h3>
+        <div class="row" style="margin-bottom:14px;">
+          <div style="text-align:center;">
+            <div style="font-family:var(--font-mono); font-size:26px; color:var(--gold-bright);">${state.gold}</div>
+            <div class="field-label">זהב (ז"ז)</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-family:var(--font-mono); font-size:26px; color:#c8ccd6;">${state.silver}</div>
+            <div class="field-label">כסף (כ"ז)</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-family:var(--font-mono); font-size:26px; color:#c2793f;">${state.copper}</div>
+            <div class="field-label">נחושת (נ"ז)</div>
+          </div>
+        </div>
         <div class="row">
+          <div><label class="field-label">מטבע</label>
+            <select id="gdCoin">
+              <option value="gold">זהב</option>
+              <option value="silver">כסף</option>
+              <option value="copper">נחושת</option>
+            </select>
+          </div>
           <div><label class="field-label">כמות</label><input type="number" id="gdAmount" value="10" min="0"></div>
           <div><button class="btn danger" id="gdSpend" style="width:100%;">הוצא</button></div>
           <div><button class="btn success" id="gdAdd" style="width:100%;">קבל</button></div>
@@ -1293,7 +1330,7 @@ function renderLootTab(){
         <div class="row">
           <div style="flex:2"><label class="field-label">שם הפריט</label><input type="text" id="ltName" placeholder="למשל: חרב קסומה"></div>
           <div><label class="field-label">כמות</label><input type="number" id="ltQty" value="1" min="1"></div>
-          <div><label class="field-label">שווי ליחידה</label><input type="number" id="ltValue" value="0"></div>
+          <div><label class="field-label">שווי ליחידה (לא חובה)</label><input type="number" id="ltValue" placeholder="0"></div>
           <div><button class="btn gold" id="ltAdd" style="width:100%;">הוסף</button></div>
         </div>
         <div style="margin-top:12px;">
@@ -1311,11 +1348,14 @@ function renderLootTab(){
   `;
 
   document.getElementById('gdAdd').addEventListener('click', ()=>{
-    state.gold += parseInt(document.getElementById('gdAmount').value,10)||0; renderLootTab();
+    const coin = document.getElementById('gdCoin').value;
+    const amt = parseInt(document.getElementById('gdAmount').value,10)||0;
+    state[coin] += amt; renderLootTab();
   });
   document.getElementById('gdSpend').addEventListener('click', ()=>{
+    const coin = document.getElementById('gdCoin').value;
     const amt = parseInt(document.getElementById('gdAmount').value,10)||0;
-    state.gold = Math.max(0, state.gold-amt); renderLootTab();
+    state[coin] = Math.max(0, state[coin]-amt); renderLootTab();
   });
 
   document.getElementById('ltAdd').addEventListener('click', ()=>{
@@ -1343,6 +1383,7 @@ function renderLootTab(){
 /* =========================================================
    INIT
    ========================================================= */
+loadState();
 applyLevelDerivedStats();
 renderTabs();
 renderMain();
