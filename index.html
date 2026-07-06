@@ -291,6 +291,7 @@
   .badge{ display:inline-block; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:700; font-family: var(--font-mono); }
   .badge.short{ background: var(--utility-bg); color: var(--utility); border:1px solid var(--utility-line); }
   .badge.long{ background: var(--nature-bg); color: var(--nature); border:1px solid var(--nature-line); }
+  .badge.day{ background: var(--panel); color: var(--gold-bright); border:1px solid var(--gold-dim); font-weight:600; }
 
   .attack-row{ background: var(--panel-3); border-radius: 7px; padding: 10px 12px; margin-bottom:8px; }
   .attack-row .row{ margin-bottom: 6px; }
@@ -411,6 +412,7 @@ function doLongRest(){
   const r = state.resources;
   Object.values(state.slots).forEach(s=> s.used = 0);
   state.specials.forEach(s=> s.used=0);
+  state.spells.forEach(s=>{ if(s.usesPerDay) s.usesUsed = 0; });
   r.hpCur = r.hpMax; r.hpTemp = 0;
   renderMain();
 }
@@ -740,11 +742,15 @@ function renderSetupTab(){
 function recommendCheapest(category){
   const candidates = state.spells.filter(s => s.category === category).sort((a,b)=>a.level-b.level);
   for(const sp of candidates){
+    if(sp.usesPerDay){
+      if((sp.usesUsed||0) < sp.usesPerDay) return {spell: sp, reason:`הטלות ליום (נותרו ${sp.usesPerDay-(sp.usesUsed||0)}/${sp.usesPerDay})`};
+      continue;
+    }
     if(sp.level === 0) return {spell: sp, reason:'קסם פשוט — ללא עלות בחריצים'};
     const slot = state.slots[sp.level];
     if(slot && slot.used < slot.max) return {spell: sp, reason:`דורש חריץ רמה ${sp.level} (נותרו ${slot.max - slot.used})`};
   }
-  const cantrip = candidates.find(s=>s.level===0);
+  const cantrip = candidates.find(s=>s.level===0 && !s.usesPerDay);
   if(cantrip) return {spell: cantrip, reason:'קסם פשוט — ללא עלות בחריצים'};
   return null;
 }
@@ -780,6 +786,7 @@ function renderSpellsTab(){
           </div>
           <div class="row" style="margin-top:8px;">
             <div style="flex:3"><label class="field-label">הערה (אופציונלי)</label><input type="text" id="spNewNote" placeholder="נזק, טווח, אפקט..."></div>
+            <div><label class="field-label">הטלות ליום (אופציונלי)</label><input type="number" id="spNewUsesPerDay" min="0" placeholder="ריק = חריצים רגילים"></div>
             <div style="flex:1; min-width:110px;"><button class="btn gold" id="spAddBtn" style="width:100%;">הוסף לחש</button></div>
           </div>
 
@@ -788,15 +795,27 @@ function renderSpellsTab(){
           </div>
 
           <div id="spellList">
-            ${filtered.length ? filtered.map(s=>`
+            ${filtered.length ? filtered.map(s=>{
+              let usesHtml = '';
+              if(s.usesPerDay){
+                let pips=''; for(let i=0;i<s.usesPerDay;i++) pips += `<div class="pip ${i<(s.usesUsed||0)?'used':''}" data-spell-use="${s.id}" data-spell-idx="${i}"></div>`;
+                usesHtml = `
+                  <span class="badge day">${s.usesUsed||0}/${s.usesPerDay} ליום</span>
+                  <div class="slot-pips" style="flex:0 0 auto;">${pips}</div>
+                `;
+              }
+              return `
               <div class="spell-item cat-${s.category}">
                 <span class="lvl">${s.level===0?'פשוט':'רמה '+s.level}</span>
                 <span class="name">${esc(s.name)}</span>
                 <span class="note">${esc(s.note||'')}</span>
+                ${usesHtml}
                 <button class="icon-btn" data-del-spell="${s.id}" title="מחק" aria-label="מחק">✕</button>
               </div>
-            `).join('') : `<div class="empty-state">אין לחשים בקטגוריה זו עדיין.</div>`}
+            `;
+            }).join('') : `<div class="empty-state">אין לחשים בקטגוריה זו עדיין.</div>`}
           </div>
+          <p class="footnote">"הטלות ליום" הופך את הלחש למונה עצמאי (כמו יכולת מולדת) שלא צורך חריצי קסם, ומתאפס במנוחה ארוכה. השאירו ריק כדי שהלחש ימשיך להשתמש בחריצים הרגילים.</p>
         </div>
       </div>
 
@@ -852,12 +871,16 @@ function renderSpellsTab(){
   document.getElementById('spAddBtn').addEventListener('click', ()=>{
     const name = document.getElementById('spNewName').value.trim();
     if(!name) return;
+    const usesPerDayRaw = document.getElementById('spNewUsesPerDay').value.trim();
+    const usesPerDay = usesPerDayRaw ? parseInt(usesPerDayRaw,10) : null;
     state.spells.push({
       id: uid(),
       name,
       category: document.getElementById('spNewCat').value,
       level: parseInt(document.getElementById('spNewLevel').value,10),
       note: document.getElementById('spNewNote').value.trim(),
+      usesPerDay: usesPerDay && usesPerDay > 0 ? usesPerDay : null,
+      usesUsed: 0,
     });
     renderSpellsTab();
   });
@@ -877,6 +900,17 @@ function renderSpellsTab(){
       const s = state.slots[lvl];
       s.used = (idx < s.used) ? idx : idx+1;
       s.used = clamp(s.used, 0, s.max);
+      renderSpellsTab();
+    });
+  });
+
+  pane.querySelectorAll('[data-spell-use]').forEach(pip=>{
+    pip.addEventListener('click', ()=>{
+      const sp = state.spells.find(x=>x.id===pip.dataset.spellUse);
+      if(!sp) return;
+      const idx = parseInt(pip.dataset.spellIdx,10);
+      sp.usesUsed = (idx < (sp.usesUsed||0)) ? idx : idx+1;
+      sp.usesUsed = clamp(sp.usesUsed, 0, sp.usesPerDay);
       renderSpellsTab();
     });
   });
