@@ -366,6 +366,7 @@ const state = {
   ],
   slots: {1:{max:4,used:0},2:{max:3,used:0},3:{max:2,used:0},4:{max:1,used:0},5:{max:0,used:0},6:{max:0,used:0},7:{max:0,used:0},8:{max:0,used:0},9:{max:0,used:0}},
   spellFilter: 'all',
+  spellTagFilter: '',
   recommendCategory: 'combat',
 
   specials: [
@@ -758,7 +759,9 @@ function recommendCheapest(category){
 function renderSpellsTab(){
   const pane = document.getElementById('pane-spells');
   const catLabel = {combat:'קרבי', environmental:'סביבתי', utility:'תועלתי', all:'הכול'};
-  const filtered = state.spellFilter==='all' ? state.spells : state.spells.filter(s=>s.category===state.spellFilter);
+  let filtered = state.spellFilter==='all' ? state.spells : state.spells.filter(s=>s.category===state.spellFilter);
+  const tagFilter = (state.spellTagFilter||'').trim().toLowerCase();
+  if(tagFilter) filtered = filtered.filter(s=>(s.tag||'').toLowerCase().includes(tagFilter));
   const rec = recommendCheapest(state.recommendCategory);
 
   pane.innerHTML = `
@@ -787,6 +790,13 @@ function renderSpellsTab(){
           <div class="row" style="margin-top:8px;">
             <div style="flex:3"><label class="field-label">הערה (אופציונלי)</label><input type="text" id="spNewNote" placeholder="נזק, טווח, אפקט..."></div>
             <div><label class="field-label">הטלות ליום (אופציונלי)</label><input type="number" id="spNewUsesPerDay" min="0" placeholder="ריק = חריצים רגילים"></div>
+          </div>
+          <div class="row" style="margin-top:8px;">
+            <div style="flex:2"><label class="field-label">תג (אופציונלי, למשל: ריפוי)</label><input type="text" id="spNewTag" placeholder="שם תג לסינון"></div>
+            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:150px; padding-bottom:8px;">
+              <input type="checkbox" id="spNewBonus" style="width:auto;">
+              <label for="spNewBonus" style="font-size:13px; color:var(--ink-dim); cursor:pointer;">קובית בונוס</label>
+            </div>
             <div style="flex:1; min-width:110px;"><button class="btn gold" id="spAddBtn" style="width:100%;">הוסף לחש</button></div>
           </div>
 
@@ -794,7 +804,12 @@ function renderSpellsTab(){
             ${['all','combat','environmental','utility'].map(c=>`<div class="chip" data-cat="${c}">${catLabel[c]}</div>`).join('')}
           </div>
 
-          <div id="spellList">
+          <div class="row">
+            <div style="flex:2"><label class="field-label">סנן לפי תג</label><input type="text" id="spTagFilter" value="${esc(state.spellTagFilter||'')}" placeholder="למשל: ריפוי"></div>
+            <div><button class="btn" id="spTagFilterClear">נקה סינון</button></div>
+          </div>
+
+          <div id="spellList" style="margin-top:10px;">
             ${filtered.length ? filtered.map(s=>{
               let usesHtml = '';
               if(s.usesPerDay){
@@ -809,11 +824,13 @@ function renderSpellsTab(){
                 <span class="lvl">${s.level===0?'פשוט':'רמה '+s.level}</span>
                 <span class="name">${esc(s.name)}</span>
                 <span class="note">${esc(s.note||'')}</span>
+                ${s.bonusDie ? `<span class="badge day">קובית בונוס</span>` : ''}
+                ${s.tag ? `<span class="badge long">${esc(s.tag)}</span>` : ''}
                 ${usesHtml}
                 <button class="icon-btn" data-del-spell="${s.id}" title="מחק" aria-label="מחק">✕</button>
               </div>
             `;
-            }).join('') : `<div class="empty-state">אין לחשים בקטגוריה זו עדיין.</div>`}
+            }).join('') : `<div class="empty-state">${state.spellTagFilter ? 'אין לחשים עם התג הזה.' : 'אין לחשים בקטגוריה זו עדיין.'}</div>`}
           </div>
           <p class="footnote">"הטלות ליום" הופך את הלחש למונה עצמאי (כמו יכולת מולדת) שלא צורך חריצי קסם, ומתאפס במנוחה ארוכה. השאירו ריק כדי שהלחש ימשיך להשתמש בחריצים הרגילים.</p>
         </div>
@@ -881,9 +898,14 @@ function renderSpellsTab(){
       note: document.getElementById('spNewNote').value.trim(),
       usesPerDay: usesPerDay && usesPerDay > 0 ? usesPerDay : null,
       usesUsed: 0,
+      bonusDie: document.getElementById('spNewBonus').checked,
+      tag: document.getElementById('spNewTag').value.trim(),
     });
     renderSpellsTab();
   });
+
+  document.getElementById('spTagFilter').addEventListener('input', e=>{ state.spellTagFilter = e.target.value; renderSpellsTab(); });
+  document.getElementById('spTagFilterClear').addEventListener('click', ()=>{ state.spellTagFilter=''; renderSpellsTab(); });
 
   pane.querySelectorAll('[data-del-spell]').forEach(b=>{
     b.addEventListener('click', ()=>{
