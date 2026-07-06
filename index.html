@@ -691,7 +691,7 @@ function renderSetupTab(){
     <p class="footnote">השינויים נשמרים מיד. עדכון הרמה מרענן אוטומטית בונוס מיומנות, קוביות חיים וחריצי קסם.</p>
   `;
 
-  document.getElementById('stName').addEventListener('input', e=>{ c.name = e.target.value; });
+  document.getElementById('stName').addEventListener('input', e=>{ c.name = e.target.value; saveState(); });
   document.getElementById('stLevel').addEventListener('change', e=>{
     c.level = clamp(parseInt(e.target.value,10)||1, 1, 20);
     applyLevelDerivedStats();
@@ -718,9 +718,10 @@ function renderSetupTab(){
   document.getElementById('stHpMax').addEventListener('change', e=>{
     r.hpMax = Math.max(1, parseInt(e.target.value,10)||1);
     r.hpCur = clamp(r.hpCur, 0, r.hpMax);
+    saveState();
   });
-  document.getElementById('stHdType').addEventListener('change', e=>{ r.hdType = parseInt(e.target.value,10); });
-  document.getElementById('stConMod').addEventListener('change', e=>{ r.conMod = parseInt(e.target.value,10)||0; });
+  document.getElementById('stHdType').addEventListener('change', e=>{ r.hdType = parseInt(e.target.value,10); saveState(); });
+  document.getElementById('stConMod').addEventListener('change', e=>{ r.conMod = parseInt(e.target.value,10)||0; saveState(); });
 
   pane.querySelectorAll('[data-st-slot]').forEach(inp=>{
     inp.addEventListener('change', ()=>{
@@ -728,6 +729,7 @@ function renderSetupTab(){
       const v = clamp(parseInt(inp.value,10)||0, 0, 20);
       state.slots[lvl].max = v;
       state.slots[lvl].used = Math.min(state.slots[lvl].used, v);
+      saveState();
     });
   });
 }
@@ -881,6 +883,8 @@ function renderSpellsTab(){
 
   document.getElementById('shortRestSlots').addEventListener('click', doShortRest);
   document.getElementById('longRestSlots').addEventListener('click', doLongRest);
+
+  saveState();
 }
 
 /* =========================================================
@@ -1039,6 +1043,8 @@ function renderFighterTab(){
         <div class="stat"><div class="num">${totalRoll}</div><div class="lbl">סה"כ בפועל</div></div>
       </div>`;
   });
+
+  saveState();
 }
 
 function renderComboList(){
@@ -1092,6 +1098,8 @@ function renderComboList(){
       renderComboList();
     });
   });
+
+  saveState();
 }
 
 /* =========================================================
@@ -1181,6 +1189,7 @@ function doDiceRoll(){
 
   state.diceHistory.unshift({count,side,mod,mode,total:chosen.total});
   state.diceHistory = state.diceHistory.slice(0,10);
+  saveState();
 }
 
 function doSimulate(){
@@ -1278,6 +1287,8 @@ function renderResourcesTab(){
   });
   document.getElementById('rShortRest').addEventListener('click', doShortRest);
   document.getElementById('rLongRest').addEventListener('click', doLongRest);
+
+  saveState();
 }
 
 /* =========================================================
@@ -1378,6 +1389,8 @@ function renderLootTab(){
     state.inventory = state.inventory.filter(i=>i.id!==item.id);
     renderLootTab();
   }));
+
+  saveState();
 }
 
 /* =========================================================
