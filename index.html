@@ -312,30 +312,6 @@
   .hist-fill{ height:100%; background: linear-gradient(90deg, var(--utility), var(--gold)); }
   .hist-count{ width:34px; font-family: var(--font-mono); font-size:10.5px; color: var(--ink-faint); }
 
-  .combatant{
-    display:flex; align-items:center; gap:12px;
-    background: var(--panel-3); border-radius: 8px; padding: 10px 14px; margin-bottom:8px;
-    border: 1px solid var(--line-soft);
-  }
-  .combatant.active-turn{ border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold) inset; }
-  .combatant.dead{ opacity: .45; }
-  .combatant .init-num{
-    font-family: var(--font-mono); font-size: 20px; font-weight:700; color: var(--gold-bright);
-    width: 34px; text-align:center;
-  }
-  .combatant .cname{ font-weight:700; }
-  .combatant .cname.enemy{ color: var(--combat); }
-  .combatant .cname.ally{ color: var(--nature); }
-  .hp-bar-wrap{ width: 130px; }
-  .hp-bar{ height: 8px; border-radius: 4px; background: var(--panel); overflow:hidden; margin-bottom:3px; }
-  .hp-bar-fill{ height:100%; background: var(--nature); transition: width .2s; }
-  .hp-text{ font-family: var(--font-mono); font-size: 11px; color: var(--ink-dim); text-align:center; }
-
-  .round-badge{
-    font-family: var(--font-mono); background: var(--panel-3); border:1px solid var(--gold-dim);
-    color: var(--gold-bright); padding: 6px 16px; border-radius: 20px; font-weight:700; font-size:13px;
-  }
-
   .resource-bar-big{ height: 20px; border-radius: 6px; background: var(--panel); overflow:hidden; border:1px solid var(--line); }
   .resource-bar-big-fill{ height:100%; transition: width .25s; }
 
@@ -400,10 +376,6 @@ const state = {
   ],
 
   diceHistory: [],
-
-  combatants: [],
-  round: 1,
-  turnIndex: 0,
 
   resources: {
     hpMax: 45, hpCur: 45, hpTemp: 0,
@@ -582,7 +554,6 @@ const TABS = [
   {id:'spells', label:'לוחשות', dotColor:'var(--utility)', visible:()=>currentClassIsCaster()},
   {id:'fighter', label:'לוחם', dotColor:'var(--combat)', visible:()=>!currentClassIsCaster()},
   {id:'dice', label:'קוביות', dotColor:'var(--gold)'},
-  {id:'initiative', label:'יוזמה וקרב', dotColor:'var(--combat)'},
   {id:'resources', label:'משאבים', dotColor:'var(--nature)'},
   {id:'loot', label:'שלל וזהב', dotColor:'var(--gold)'},
 ];
@@ -610,7 +581,6 @@ function renderMain(){
     spells: renderSpellsTab,
     fighter: renderFighterTab,
     dice: renderDiceTab,
-    initiative: renderInitiativeTab,
     resources: renderResourcesTab,
     loot: renderLootTab,
   };
@@ -1235,92 +1205,6 @@ function doSimulate(){
     <div style="margin-top:12px;">${histHtml}</div>
     <div class="footnote">ההפרש בין הממוצע התאורטי לממוצע במצב יתרון/חיסרון נובע מבחירת הטובה/הגרועה מבין שתי הטלות מלאות.</div>
   `;
-}
-
-/* =========================================================
-   4. יוזמה וקרב
-   ========================================================= */
-function renderInitiativeTab(){
-  const pane = document.getElementById('pane-initiative');
-  const sorted = [...state.combatants].sort((a,b)=>b.initiative-a.initiative);
-
-  pane.innerHTML = `
-    <h2 class="pane-title">יוזמה וקרב</h2>
-    <p class="pane-note">הוסיפו לוחמים ואויבים, סדרו לפי יוזמה ועקבו אחרי תורות ונקודות פגיעה.</p>
-
-    <div class="card">
-      <div class="row">
-        <div><label class="field-label">שם</label><input type="text" id="cbName" placeholder="למשל: אורק #1"></div>
-        <div><label class="field-label">יוזמה</label><input type="number" id="cbInit" value="10"></div>
-        <div><label class="field-label">חיים מקסימליים</label><input type="number" id="cbHp" value="20"></div>
-        <div><label class="field-label">צד</label>
-          <select id="cbSide"><option value="ally">בעלי ברית</option><option value="enemy">אויב</option></select>
-        </div>
-        <div><button class="btn gold" id="cbAdd" style="width:100%;">הוסף</button></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <span class="round-badge">סיבוב ${state.round}</span>
-        <div class="row" style="margin:0; gap:8px;">
-          <button class="btn" id="cbReset">איפוס תור</button>
-          <button class="btn gold" id="cbNext">הבא בתור ←</button>
-        </div>
-      </div>
-      <div id="combatantList">
-        ${sorted.length ? sorted.map((c,i)=>{
-          const pct = clamp(c.hp/c.maxHp*100,0,100);
-          return `<div class="combatant ${i===state.turnIndex?'active-turn':''} ${c.hp<=0?'dead':''}">
-            <div class="init-num">${c.initiative}</div>
-            <span class="cname ${c.side}">${esc(c.name)}</span>
-            <div class="hp-bar-wrap">
-              <div class="hp-bar"><div class="hp-bar-fill" style="width:${pct}%; background:${c.side==='enemy'?'var(--combat)':'var(--nature)'}"></div></div>
-              <div class="hp-text">${c.hp} / ${c.maxHp}</div>
-            </div>
-            <button class="btn small" data-dmg="${c.id}">-5</button>
-            <button class="btn small success" data-heal="${c.id}">+5</button>
-            <button class="icon-btn" data-del-cb="${c.id}">✕</button>
-          </div>`;
-        }).join('') : `<div class="empty-state">אין משתתפים בקרב עדיין.</div>`}
-      </div>
-    </div>
-  `;
-
-  document.getElementById('cbAdd').addEventListener('click', ()=>{
-    const name = document.getElementById('cbName').value.trim();
-    if(!name) return;
-    const maxHp = parseInt(document.getElementById('cbHp').value,10)||1;
-    state.combatants.push({
-      id: uid(), name,
-      initiative: parseInt(document.getElementById('cbInit').value,10)||0,
-      hp: maxHp, maxHp,
-      side: document.getElementById('cbSide').value,
-    });
-    renderInitiativeTab();
-  });
-
-  pane.querySelectorAll('[data-dmg]').forEach(b=>b.addEventListener('click', ()=>{
-    const c = state.combatants.find(x=>x.id===b.dataset.dmg); c.hp = clamp(c.hp-5,0,c.maxHp); renderInitiativeTab();
-  }));
-  pane.querySelectorAll('[data-heal]').forEach(b=>b.addEventListener('click', ()=>{
-    const c = state.combatants.find(x=>x.id===b.dataset.heal); c.hp = clamp(c.hp+5,0,c.maxHp); renderInitiativeTab();
-  }));
-  pane.querySelectorAll('[data-del-cb]').forEach(b=>b.addEventListener('click', ()=>{
-    state.combatants = state.combatants.filter(x=>x.id!==b.dataset.delCb);
-    state.turnIndex = 0;
-    renderInitiativeTab();
-  }));
-
-  document.getElementById('cbNext').addEventListener('click', ()=>{
-    if(!state.combatants.length) return;
-    state.turnIndex++;
-    if(state.turnIndex >= state.combatants.length){ state.turnIndex = 0; state.round++; }
-    renderInitiativeTab();
-  });
-  document.getElementById('cbReset').addEventListener('click', ()=>{
-    state.turnIndex = 0; state.round = 1; renderInitiativeTab();
-  });
 }
 
 /* =========================================================
