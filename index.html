@@ -291,6 +291,7 @@
   .badge{ display:inline-block; padding:2px 8px; border-radius:5px; font-size:11px; font-weight:700; font-family: var(--font-mono); }
   .badge.short{ background: var(--utility-bg); color: var(--utility); border:1px solid var(--utility-line); }
   .badge.long{ background: var(--nature-bg); color: var(--nature); border:1px solid var(--nature-line); }
+  .badge.day{ background: var(--panel); color: var(--gold-bright); border:1px solid var(--gold-dim); }
 
   .attack-row{ background: var(--panel-3); border-radius: 7px; padding: 10px 12px; margin-bottom:8px; }
   .attack-row .row{ margin-bottom: 6px; }
@@ -410,8 +411,13 @@ function doShortRest(){
 function doLongRest(){
   const r = state.resources;
   Object.values(state.slots).forEach(s=> s.used = 0);
-  state.specials.forEach(s=> s.used=0);
+  state.specials.forEach(s=>{ if(s.reset!=='day') s.used=0; });
   r.hpCur = r.hpMax; r.hpTemp = 0;
+  renderMain();
+}
+// יכולות עם ספירה עצמאית (כמו "פעמיים ביום") לא מתאפסות במנוחה קצרה/ארוכה — יש להן איפוס נפרד
+function doDayReset(){
+  state.specials.forEach(s=>{ if(s.reset==='day') s.used=0; });
   renderMain();
 }
 
@@ -928,15 +934,16 @@ function renderFighterTab(){
             <div style="flex:2"><label class="field-label">שם היכולת</label><input type="text" id="spcName" placeholder="למשל: התקפה שנייה"></div>
             <div><label class="field-label">שימושים</label><input type="number" id="spcMax" min="1" value="1"></div>
             <div><label class="field-label">מתאפס ב</label>
-              <select id="spcReset"><option value="short">מנוחה קצרה</option><option value="long">מנוחה ארוכה</option></select>
+              <select id="spcReset"><option value="short">מנוחה קצרה</option><option value="long">מנוחה ארוכה</option><option value="day">ספירה עצמאית (ליום)</option></select>
             </div>
             <div><button class="btn gold" id="spcAdd">הוסף</button></div>
           </div>
           <div id="specialsList" style="margin-top:14px;">
             ${state.specials.length ? state.specials.map(sp=>{
               let pips=''; for(let i=0;i<sp.max;i++) pips += `<div class="use-pip ${i<sp.used?'spent':''}"></div>`;
+              const resetLabel = sp.reset==='short'?'קצרה':sp.reset==='long'?'ארוכה':'ליום';
               return `<div class="list-item">
-                <span class="grow"><strong>${esc(sp.name)}</strong> <span class="badge ${sp.reset}">${sp.reset==='short'?'קצרה':'ארוכה'}</span></span>
+                <span class="grow"><strong>${esc(sp.name)}</strong> <span class="badge ${sp.reset}">${resetLabel}</span></span>
                 <div class="uses-track">${pips}</div>
                 <button class="btn small" data-use-special="${sp.id}" ${sp.used>=sp.max?'disabled':''}>השתמש</button>
                 <button class="icon-btn" data-del-special="${sp.id}">✕</button>
@@ -947,7 +954,10 @@ function renderFighterTab(){
             <button class="btn" id="shortRestSpecials" style="flex:1;">מנוחה קצרה</button>
             <button class="btn success" id="longRestSpecials" style="flex:1;">מנוחה ארוכה</button>
           </div>
-          <p class="footnote">מנוחה כאן משפיעה על כל הדמות — יכולות מיוחדות, חריצי קסם וחיים כאחד.</p>
+          <div class="row" style="margin-top:8px;">
+            <button class="btn gold" id="dayResetSpecials" style="flex:1;">איפוס יומי (ספירה עצמאית)</button>
+          </div>
+          <p class="footnote">מנוחה קצרה/ארוכה משפיעה על כל הדמות — יכולות מיוחדות, חריצי קסם וחיים כאחד. יכולות עם "ספירה עצמאית" (למשל פעמיים ביום) לא מתאפסות במנוחות אלו — יש להשתמש בכפתור האיפוס היומי בנפרד.</p>
         </div>
       </div>
 
@@ -1001,6 +1011,7 @@ function renderFighterTab(){
   });
   document.getElementById('shortRestSpecials').addEventListener('click', doShortRest);
   document.getElementById('longRestSpecials').addEventListener('click', doLongRest);
+  document.getElementById('dayResetSpecials').addEventListener('click', doDayReset);
 
   document.getElementById('critCalc').addEventListener('click', ()=>{
     const dice = parseInt(document.getElementById('critDice').value,10)||1;
