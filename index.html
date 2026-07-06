@@ -339,11 +339,6 @@
   .resource-bar-big{ height: 20px; border-radius: 6px; background: var(--panel); overflow:hidden; border:1px solid var(--line); }
   .resource-bar-big-fill{ height:100%; transition: width .25s; }
 
-  .hd-pips{ display:flex; gap:5px; flex-wrap:wrap; }
-  .hd-pip{ width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center;
-    font-family: var(--font-mono); font-size:11px; background: var(--panel-3); border:1px solid var(--line); }
-  .hd-pip.used{ background: var(--panel); color: var(--ink-faint); border-style:dashed; }
-
   .loot-item{ display:flex; align-items:center; gap:10px; background: var(--panel-3); border-radius:7px; padding:8px 12px; margin-bottom:6px; }
   .member-card{ background: var(--panel-3); border-radius:8px; padding:12px 14px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
   .member-card .gold-num{ font-family: var(--font-mono); font-size: 18px; color: var(--gold-bright); font-weight:700; min-width: 90px; text-align:center; }
@@ -412,7 +407,7 @@ const state = {
 
   resources: {
     hpMax: 45, hpCur: 45, hpTemp: 0,
-    hdType: 10, hdTotal: 5, hdUsed: 0,
+    hdType: 10,
     conMod: 2,
   },
 
@@ -432,6 +427,19 @@ function rollDie(sides){ return 1 + Math.floor(Math.random()*sides); }
 function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function goToTab(id){ state.activeTab = id; renderTabs(); renderMain(); }
+
+// מנוחה קצרה/ארוכה גלובלית — כפתור בכל טאב מפעיל את אותה פעולה על כל הדמות בבת אחת
+function doShortRest(){
+  state.specials.forEach(s=>{ if(s.reset==='short') s.used=0; });
+  renderMain();
+}
+function doLongRest(){
+  const r = state.resources;
+  Object.values(state.slots).forEach(s=> s.used = 0);
+  state.specials.forEach(s=> s.used=0);
+  r.hpCur = r.hpMax; r.hpTemp = 0;
+  renderMain();
+}
 
 /* =========================================================
    Open5e API — מקצועות וגזעים אמיתיים (SRD), לא מוקלד ידנית
@@ -499,12 +507,10 @@ function estimateMaxHp(selectedClass, hdType, level, conMod){
   return die + conMod + (lvl-1)*(avgPerLevel + conMod);
 }
 
-// מעדכן אוטומטית ערכים שנגזרים מרמת הדמות: קוביות חיים, חריצי קסם, ובונוס מיומנות
+// מעדכן אוטומטית ערכים שנגזרים מרמת הדמות: חריצי קסם ובונוס מיומנות
 function applyLevelDerivedStats(){
-  const c = state.character, r = state.resources;
+  const c = state.character;
   const level = clamp(c.level||1, 1, 20);
-
-  r.hdTotal = level;
 
   if(currentClassIsCaster()){
     const row = FULL_CASTER_SLOT_TABLE[level] || FULL_CASTER_SLOT_TABLE[20];
@@ -666,13 +672,12 @@ function renderSetupTab(){
       </div>
 
       <div class="card">
-        <h3>חיים וקוביות חיים</h3>
+        <h3>חיים</h3>
         <div class="row">
           <div><label class="field-label">חיים מקסימליים</label><input type="number" id="stHpMax" min="1" value="${r.hpMax}"></div>
           <div><label class="field-label">סוג קוביית חיים</label>
             <select id="stHdType">${[6,8,10,12].map(d=>`<option value="${d}" ${r.hdType===d?'selected':''}>ד${d}</option>`).join('')}</select>
           </div>
-          <div><label class="field-label">סה"כ קוביות חיים <small style="color:var(--ink-faint);">(= רמה)</small></label><input type="number" id="stHdTotal" min="0" value="${r.hdTotal}"></div>
           <div><label class="field-label">בונוס קונסטיטוציה</label><input type="number" id="stConMod" value="${r.conMod}"></div>
         </div>
         ${selectedClass ? `<div class="footnote" style="margin-top:10px;">טיפ: לפי Open5e, קוביית החיים הרשמית של ${esc(selectedClass.name)} היא ד${hitDiceToNumber(selectedClass.hit_dice)}.
@@ -729,10 +734,6 @@ function renderSetupTab(){
     r.hpCur = clamp(r.hpCur, 0, r.hpMax);
   });
   document.getElementById('stHdType').addEventListener('change', e=>{ r.hdType = parseInt(e.target.value,10); });
-  document.getElementById('stHdTotal').addEventListener('change', e=>{
-    r.hdTotal = clamp(parseInt(e.target.value,10)||0, 0, 30);
-    r.hdUsed = Math.min(r.hdUsed, r.hdTotal);
-  });
   document.getElementById('stConMod').addEventListener('change', e=>{ r.conMod = parseInt(e.target.value,10)||0; });
 
   pane.querySelectorAll('[data-st-slot]').forEach(inp=>{
@@ -825,8 +826,10 @@ function renderSpellsTab(){
             </div>`;
           }).join('')}
           <div class="row" style="margin-top:10px;">
-            <button class="btn success" id="longRestSlots" style="flex:1;">מנוחה ארוכה — איפוס חריצים</button>
+            <button class="btn" id="shortRestSlots" style="flex:1;">מנוחה קצרה</button>
+            <button class="btn success" id="longRestSlots" style="flex:1;">מנוחה ארוכה</button>
           </div>
+          <p class="footnote">מנוחה כאן משפיעה על כל הדמות — חריצי קסם, יכולות מיוחדות וחיים כאחד.</p>
           <p class="footnote">כדי לשנות את הכמות המקסימלית של החריצים (למשל אחרי עליית רמה), עברו ל<a href="#" id="goSetupSlots" style="color:var(--gold-bright);">הגדרת דמות</a>.</p>
         </div>
 
@@ -890,10 +893,8 @@ function renderSpellsTab(){
     });
   });
 
-  document.getElementById('longRestSlots').addEventListener('click', ()=>{
-    Object.values(state.slots).forEach(s=> s.used = 0);
-    renderSpellsTab();
-  });
+  document.getElementById('shortRestSlots').addEventListener('click', doShortRest);
+  document.getElementById('longRestSlots').addEventListener('click', doLongRest);
 }
 
 /* =========================================================
@@ -956,6 +957,7 @@ function renderFighterTab(){
             <button class="btn" id="shortRestSpecials" style="flex:1;">מנוחה קצרה</button>
             <button class="btn success" id="longRestSpecials" style="flex:1;">מנוחה ארוכה</button>
           </div>
+          <p class="footnote">מנוחה כאן משפיעה על כל הדמות — יכולות מיוחדות, חריצי קסם וחיים כאחד.</p>
         </div>
       </div>
 
@@ -1007,12 +1009,8 @@ function renderFighterTab(){
   pane.querySelectorAll('[data-del-special]').forEach(b=>{
     b.addEventListener('click', ()=>{ state.specials = state.specials.filter(s=>s.id!==b.dataset.delSpecial); renderFighterTab(); });
   });
-  document.getElementById('shortRestSpecials').addEventListener('click', ()=>{
-    state.specials.forEach(s=>{ if(s.reset==='short') s.used=0; }); renderFighterTab();
-  });
-  document.getElementById('longRestSpecials').addEventListener('click', ()=>{
-    state.specials.forEach(s=> s.used=0); renderFighterTab();
-  });
+  document.getElementById('shortRestSpecials').addEventListener('click', doShortRest);
+  document.getElementById('longRestSpecials').addEventListener('click', doLongRest);
 
   document.getElementById('critCalc').addEventListener('click', ()=>{
     const dice = parseInt(document.getElementById('critDice').value,10)||1;
@@ -1333,45 +1331,33 @@ function renderResourcesTab(){
   const r = state.resources;
   const hpPct = clamp(r.hpCur/r.hpMax*100,0,100);
 
-  let hdPips=''; for(let i=0;i<r.hdTotal;i++) hdPips += `<div class="hd-pip ${i<r.hdUsed?'used':''}">ד${r.hdType}</div>`;
-
   pane.innerHTML = `
     <h2 class="pane-title">משאבי דמות ${state.character.name?'— '+esc(state.character.name):''}</h2>
-    <p class="pane-note">עקוב אחרי נקודות חיים, חיזוק זמני וקוביות חיים למנוחה קצרה. הערכים הקבועים (חיים מקסימליים, סוג וכמות קוביות חיים) נקבעים ב<a href="#" id="goSetupTop" style="color:var(--gold-bright);">הגדרת דמות</a>.</p>
+    <p class="pane-note">עקוב אחרי נקודות חיים וחיזוק זמני. חיים מקסימליים נקבעים ב<a href="#" id="goSetupTop" style="color:var(--gold-bright);">הגדרת דמות</a>.</p>
 
-    <div class="grid2">
-      <div class="card">
-        <h3>נקודות חיים</h3>
-        <div class="resource-bar-big"><div class="resource-bar-big-fill" style="width:${hpPct}%; background:var(--nature);"></div></div>
-        <div style="display:flex; justify-content:space-between; margin:8px 0 14px; font-family:var(--font-mono);">
-          <span>${r.hpCur} / ${r.hpMax}</span>
-          <span style="color:var(--utility);">חיזוק זמני: ${r.hpTemp}</span>
-        </div>
-        <div class="row">
-          <div><label class="field-label">כמות</label><input type="number" id="rHpAmount" value="5" min="0"></div>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <button class="btn danger" id="rDamage" style="flex:1;">פגיעה</button>
-          <button class="btn success" id="rHeal" style="flex:1;">ריפוי</button>
-        </div>
-        <div class="row" style="margin-top:8px;">
-          <div><label class="field-label">הוסף חיזוק זמני</label><input type="number" id="rTempAmount" value="5"></div>
-          <div><button class="btn" id="rAddTemp" style="width:100%;">הוסף</button></div>
-        </div>
+    <div class="card">
+      <h3>נקודות חיים</h3>
+      <div class="resource-bar-big"><div class="resource-bar-big-fill" style="width:${hpPct}%; background:var(--nature);"></div></div>
+      <div style="display:flex; justify-content:space-between; margin:8px 0 14px; font-family:var(--font-mono);">
+        <span>${r.hpCur} / ${r.hpMax}</span>
+        <span style="color:var(--utility);">חיזוק זמני: ${r.hpTemp}</span>
       </div>
-
-      <div class="card">
-        <h3>קוביות חיים <small>למנוחה קצרה · ד${r.hdType}, בונוס קונ' ${r.conMod>=0?'+':''}${r.conMod}</small></h3>
-        <div class="hd-pips" style="margin:8px 0 14px;">${hdPips || '<span style="color:var(--ink-faint)">—</span>'}</div>
-        <div class="row">
-          <button class="btn gold" id="rUseHd" style="width:100%;">בזבז קוביית חיים לריפוי</button>
-        </div>
-        <div id="rHdResult"></div>
-        <div class="row" style="margin-top:14px;">
-          <button class="btn" id="rShortRest" style="flex:1;">מנוחה קצרה</button>
-          <button class="btn success" id="rLongRest" style="flex:1;">מנוחה ארוכה — איפוס מלא</button>
-        </div>
+      <div class="row">
+        <div><label class="field-label">כמות</label><input type="number" id="rHpAmount" value="5" min="0"></div>
       </div>
+      <div class="row" style="margin-top:8px;">
+        <button class="btn danger" id="rDamage" style="flex:1;">פגיעה</button>
+        <button class="btn success" id="rHeal" style="flex:1;">ריפוי</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <div><label class="field-label">הוסף חיזוק זמני</label><input type="number" id="rTempAmount" value="5"></div>
+        <div><button class="btn" id="rAddTemp" style="width:100%;">הוסף</button></div>
+      </div>
+      <div class="row" style="margin-top:14px;">
+        <button class="btn" id="rShortRest" style="flex:1;">מנוחה קצרה</button>
+        <button class="btn success" id="rLongRest" style="flex:1;">מנוחה ארוכה</button>
+      </div>
+      <p class="footnote">מנוחה כאן משפיעה על כל הדמות — חיים, חריצי קסם ויכולות מיוחדות כאחד.</p>
     </div>
   `;
 
@@ -1390,20 +1376,8 @@ function renderResourcesTab(){
     const amt = parseInt(document.getElementById('rTempAmount').value,10)||0;
     r.hpTemp = Math.max(r.hpTemp, amt); renderResourcesTab();
   });
-  document.getElementById('rUseHd').addEventListener('click', ()=>{
-    if(r.hdUsed >= r.hdTotal){ document.getElementById('rHdResult').innerHTML = `<div class="footnote">אין קוביות חיים זמינות.</div>`; return; }
-    const roll = rollDie(r.hdType) + r.conMod;
-    r.hdUsed++;
-    r.hpCur = clamp(r.hpCur+roll,0,r.hpMax);
-    document.getElementById('rHdResult').innerHTML = `<div class="footnote">הוטל ד${r.hdType} + ${r.conMod} = ${roll} נקודות חיים הוחזרו.</div>`;
-    renderResourcesTab();
-  });
-  document.getElementById('rShortRest').addEventListener('click', ()=>{ renderResourcesTab(); });
-  document.getElementById('rLongRest').addEventListener('click', ()=>{
-    r.hpCur = r.hpMax; r.hpTemp = 0;
-    r.hdUsed = Math.max(0, r.hdUsed - Math.ceil(r.hdTotal/2));
-    renderResourcesTab();
-  });
+  document.getElementById('rShortRest').addEventListener('click', doShortRest);
+  document.getElementById('rLongRest').addEventListener('click', doLongRest);
 }
 
 /* =========================================================
