@@ -216,27 +216,27 @@
     background: var(--panel-3);
   }
   .chip.active{ color: var(--ink); border-color: currentColor; }
-  .chip[data-cat=combat].active{ color: var(--combat); background: var(--combat-bg); border-color: var(--combat-line); }
-  .chip[data-cat=environmental].active{ color: var(--nature); background: var(--nature-bg); border-color: var(--nature-line); }
-  .chip[data-cat=utility].active{ color: var(--utility); background: var(--utility-bg); border-color: var(--utility-line); }
-  .chip[data-cat=all].active{ color: var(--gold-bright); border-color: var(--gold); background: var(--panel-3); }
 
   .spell-item{
     display:flex; align-items:center; gap:12px;
     padding: 10px 12px; margin-bottom: 8px;
     background: var(--panel-3);
-    border-right: 4px solid var(--line);
+    border-right: 4px solid var(--gold-dim);
     border-radius: 6px;
+    flex-wrap: wrap;
   }
-  .spell-item.cat-combat{ border-color: var(--combat); }
-  .spell-item.cat-environmental{ border-color: var(--nature); }
-  .spell-item.cat-utility{ border-color: var(--utility); }
   .spell-item .name{ font-weight:700; flex:1; }
   .spell-item .lvl{
     font-family: var(--font-mono); font-size: 12px; color: var(--ink-faint);
     background: var(--panel); padding: 2px 8px; border-radius: 5px;
   }
   .spell-item .note{ font-size:12px; color: var(--ink-dim); flex:2; }
+  .spell-tags-input{
+    flex: 1 1 160px; min-width: 140px;
+    background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+    border-radius: 6px; padding: 5px 9px; font-size: 12.5px;
+  }
+  .spell-tags-input:focus{ outline:none; border-color: var(--gold-dim); }
 
   .empty-state{
     color: var(--ink-faint); font-size: 13.5px; text-align:center;
@@ -420,14 +420,13 @@ const state = {
   activeTab: 'setup',
 
   spells: [
-    {id: uid(), name:'ירית קסם', category:'combat', level:0, note:'1ד10 נזק פורס, טווח 36 מ׳'},
-    {id: uid(), name:'ריפוי פצעים', category:'utility', level:1, note:'1ד8+מאפיין ריפוי במגע'},
-    {id: uid(), name:'ערפל שולט', category:'environmental', level:1, note:'עשן ענק מסתיר שדה'},
+    {id: uid(), name:'ירית קסם', level:0, note:'1ד10 נזק פורס, טווח 36 מ׳', tags:['התקפה']},
+    {id: uid(), name:'ריפוי פצעים', level:1, note:'1ד8+מאפיין ריפוי במגע', tags:['ריפוי']},
+    {id: uid(), name:'ערפל שולט', level:1, note:'עשן ענק מסתיר שדה', tags:['שליטה']},
   ],
   slots: {1:{max:4,used:0},2:{max:3,used:0},3:{max:2,used:0},4:{max:1,used:0},5:{max:0,used:0},6:{max:0,used:0},7:{max:0,used:0},8:{max:0,used:0},9:{max:0,used:0}},
-  spellFilter: 'all',
   spellTagFilter: '',
-  recommendCategory: 'combat',
+  recommendTag: '',
 
   specials: [
     {id: uid(), name:'התקפה נוספת', max:1, used:0, reset:'long'},
@@ -686,6 +685,11 @@ function loadState(){
     Object.assign(state, saved);
     // איפוס שדות האנציקלופדיה הזמניים (נטענים מחדש מ-Open5e בכל כניסה)
     state.ency = {category: savedEncyCat || 'spells', query:'', results:[], next:null, loading:false, error:null, fetched:false, detail:null};
+    // מיגרציה: לחשים ישנים השתמשו ב-category ובתג יחיד (tag) — כעת יש רק מערך tags
+    state.spells.forEach(s=>{
+      if(!Array.isArray(s.tags)) s.tags = s.tag ? [s.tag] : [];
+      delete s.tag; delete s.category;
+    });
   }catch(e){}
 }
 
@@ -822,8 +826,15 @@ function renderSetupTab(){
 /* =========================================================
    1. לוחשות — SPELLS
    ========================================================= */
-function recommendCheapest(category){
-  const candidates = state.spells.filter(s => s.category === category).sort((a,b)=>a.level-b.level);
+let spellTagsEditingId = null; // מזהה הלחש שבו נערך כרגע שדה התגיות (אחד בכל פעם)
+function parseTagsInput(raw){
+  return String(raw||'').split(',').map(t=>t.trim()).filter(Boolean);
+}
+function allSpellTags(){
+  return [...new Set(state.spells.flatMap(s=>s.tags||[]))].sort((a,b)=>a.localeCompare(b,'he'));
+}
+function recommendCheapest(tag){
+  const candidates = state.spells.filter(s => (s.tags||[]).includes(tag)).sort((a,b)=>a.level-b.level);
   for(const sp of candidates){
     if(sp.usesPerDay){
       if((sp.usesUsed||0) < sp.usesPerDay) return {spell: sp, reason:`הטלות ליום (נותרו ${sp.usesPerDay-(sp.usesUsed||0)}/${sp.usesPerDay})`};
@@ -840,29 +851,24 @@ function recommendCheapest(category){
 
 function renderSpellsTab(){
   const pane = document.getElementById('pane-spells');
-  const catLabel = {combat:'קרבי', environmental:'סביבתי', utility:'תועלתי', all:'הכול'};
-  let filtered = state.spellFilter==='all' ? state.spells : state.spells.filter(s=>s.category===state.spellFilter);
+  let filtered = state.spells;
   const tagFilter = (state.spellTagFilter||'').trim().toLowerCase();
-  if(tagFilter) filtered = filtered.filter(s=>(s.tag||'').toLowerCase().includes(tagFilter));
-  const rec = recommendCheapest(state.recommendCategory);
+  if(tagFilter) filtered = filtered.filter(s=>(s.tags||[]).some(t=>t.toLowerCase().includes(tagFilter)));
+
+  const tagOptions = allSpellTags();
+  if(!tagOptions.includes(state.recommendTag)) state.recommendTag = tagOptions[0] || '';
+  const rec = state.recommendTag ? recommendCheapest(state.recommendTag) : null;
 
   pane.innerHTML = `
     <h2 class="pane-title">לוחשות — ניהול לחשים</h2>
-    <p class="pane-note">נהל את ספר הלחשים לפי חשיבות, עקוב אחר חריצי קסם, ומצא את הלחש הכי חסכוני למצב הנוכחי.</p>
+    <p class="pane-note">נהל את ספר הלחשים לפי תגיות, עקוב אחר חריצי קסם, ומצא את הלחש הכי חסכוני לתגית נבחרת.</p>
 
     <div class="grid2">
       <div>
         <div class="card">
           <h3>ספר הלחשים</h3>
           <div class="row">
-            <div><label class="field-label">שם הלחש</label><input type="text" id="spNewName" placeholder="למשל: כדור אש"></div>
-            <div><label class="field-label">קטגוריה</label>
-              <select id="spNewCat">
-                <option value="combat">קרבי</option>
-                <option value="environmental">סביבתי</option>
-                <option value="utility">תועלתי</option>
-              </select>
-            </div>
+            <div style="flex:2"><label class="field-label">שם הלחש</label><input type="text" id="spNewName" placeholder="למשל: כדור אש"></div>
             <div><label class="field-label">רמה</label>
               <select id="spNewLevel">
                 ${[0,1,2,3,4,5,6,7,8,9].map(l=>`<option value="${l}">${l===0?'לחש פשוט':'רמה '+l}</option>`).join('')}
@@ -874,7 +880,7 @@ function renderSpellsTab(){
             <div><label class="field-label">הטלות ליום (אופציונלי)</label><input type="number" id="spNewUsesPerDay" min="0" placeholder="ריק = חריצים רגילים"></div>
           </div>
           <div class="row" style="margin-top:8px;">
-            <div style="flex:2"><label class="field-label">תג (אופציונלי, למשל: ריפוי)</label><input type="text" id="spNewTag" placeholder="שם תג לסינון"></div>
+            <div style="flex:2"><label class="field-label">תגיות (אופציונלי, מופרדות בפסיק)</label><input type="text" id="spNewTag" placeholder="למשל: ריפוי, קרבי"></div>
             <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:150px; padding-bottom:8px;">
               <input type="checkbox" id="spNewBonus" style="width:auto;">
               <label for="spNewBonus" style="font-size:13px; color:var(--ink-dim); cursor:pointer;">קובית בונוס</label>
@@ -882,12 +888,8 @@ function renderSpellsTab(){
             <div style="flex:1; min-width:110px;"><button class="btn gold" id="spAddBtn" style="width:100%;">הוסף לחש</button></div>
           </div>
 
-          <div class="chip-row" style="margin-top:16px;">
-            ${['all','combat','environmental','utility'].map(c=>`<div class="chip" data-cat="${c}">${catLabel[c]}</div>`).join('')}
-          </div>
-
-          <div class="row">
-            <div style="flex:2"><label class="field-label">סנן לפי תג</label><input type="text" id="spTagFilter" value="${esc(state.spellTagFilter||'')}" placeholder="למשל: ריפוי"></div>
+          <div class="row" style="margin-top:16px;">
+            <div style="flex:2"><label class="field-label">סנן לפי תגית</label><input type="text" id="spTagFilter" value="${esc(state.spellTagFilter||'')}" placeholder="למשל: ריפוי"></div>
             <div><button class="btn" id="spTagFilterClear">נקה סינון</button></div>
           </div>
 
@@ -901,20 +903,26 @@ function renderSpellsTab(){
                   <div class="slot-pips" style="flex:0 0 auto;">${pips}</div>
                 `;
               }
+              const isEditingTags = spellTagsEditingId === s.id;
+              const tagsHtml = isEditingTags
+                ? `<input type="text" class="spell-tags-input" data-spell-tags="${s.id}" value="${esc((s.tags||[]).join(', '))}" placeholder="הוסף תגיות, מופרדות בפסיק" autofocus>`
+                : (s.tags||[]).map(t=>`<span class="badge long">${esc(t)}</span>`).join('');
               return `
-              <div class="spell-item cat-${s.category}">
+              <div class="spell-item">
                 <span class="lvl">${s.level===0?'פשוט':'רמה '+s.level}</span>
                 <span class="name">${esc(s.name)}</span>
                 <span class="note">${esc(s.note||'')}</span>
                 ${s.bonusDie ? `<span class="badge day">קובית בונוס</span>` : ''}
-                ${s.tag ? `<span class="badge long">${esc(s.tag)}</span>` : ''}
+                ${tagsHtml}
                 ${usesHtml}
+                <button class="icon-btn" data-edit-tags="${s.id}" title="ערוך תגיות" aria-label="ערוך תגיות">${isEditingTags?'✓':'✎'}</button>
                 <button class="icon-btn" data-del-spell="${s.id}" title="מחק" aria-label="מחק">✕</button>
               </div>
             `;
-            }).join('') : `<div class="empty-state">${state.spellTagFilter ? 'אין לחשים עם התג הזה.' : 'אין לחשים בקטגוריה זו עדיין.'}</div>`}
+            }).join('') : `<div class="empty-state">${state.spellTagFilter ? 'אין לחשים עם התגית הזו.' : 'אין לחשים בספר עדיין.'}</div>`}
           </div>
           <p class="footnote">"הטלות ליום" הופך את הלחש למונה עצמאי (כמו יכולת מולדת) שלא צורך חריצי קסם, ומתאפס במנוחה ארוכה. השאירו ריק כדי שהלחש ימשיך להשתמש בחריצים הרגילים.</p>
+          <p class="footnote">אפשר להוסיף או לערוך תגיות בכל שלב — גם ללחשים שנוספו מהאנציקלופדיה — בשדה התגיות שבכל שורה. מספר תגיות מופרדות בפסיק.</p>
         </div>
       </div>
 
@@ -941,31 +949,25 @@ function renderSpellsTab(){
 
         <div class="card">
           <h3>הלחש הכי חסכוני</h3>
-          <label class="field-label">מצב נוכחי</label>
-          <select id="recCat">
-            <option value="combat">קרבי — צריך לפגוע</option>
-            <option value="environmental">סביבתי — צריך לשנות את הסביבה</option>
-            <option value="utility">תועלתי — צריך פתרון חכם</option>
-          </select>
-          ${rec ? `
-            <div class="recommend-box">
-              <div class="title">מומלץ להטיל עכשיו:</div>
-              <div class="spell-name">${esc(rec.spell.name)}</div>
-              <div class="spell-meta">${rec.reason}${rec.spell.note ? ' · '+esc(rec.spell.note) : ''}</div>
-            </div>
-          ` : `<div class="empty-state">אין לחש זמין בקטגוריה זו כרגע (או שאין חריצים פנויים).</div>`}
+          ${tagOptions.length ? `
+            <label class="field-label">תגית לחיפוש</label>
+            <select id="recCat">
+              ${tagOptions.map(t=>`<option value="${esc(t)}" ${state.recommendTag===t?'selected':''}>${esc(t)}</option>`).join('')}
+            </select>
+            ${rec ? `
+              <div class="recommend-box">
+                <div class="title">מומלץ להטיל עכשיו:</div>
+                <div class="spell-name">${esc(rec.spell.name)}</div>
+                <div class="spell-meta">${rec.reason}${rec.spell.note ? ' · '+esc(rec.spell.note) : ''}</div>
+              </div>
+            ` : `<div class="empty-state">אין לחש זמין עם התגית הזו כרגע (או שאין חריצים פנויים).</div>`}
+          ` : `<div class="empty-state">הוסיפו תגיות ללחשים (בטופס למעלה או בשדה התגיות שבכל שורה) כדי לקבל כאן המלצת לחש חסכוני.</div>`}
         </div>
       </div>
     </div>
   `;
 
-  document.getElementById('recCat').value = state.recommendCategory;
-  document.getElementById('recCat').addEventListener('change', e=>{ state.recommendCategory = e.target.value; renderSpellsTab(); });
-
-  pane.querySelectorAll('.chip').forEach(chip=>{
-    if(chip.dataset.cat === state.spellFilter) chip.classList.add('active');
-    chip.addEventListener('click', ()=>{ state.spellFilter = chip.dataset.cat; renderSpellsTab(); });
-  });
+  document.getElementById('recCat')?.addEventListener('change', e=>{ state.recommendTag = e.target.value; renderSpellsTab(); });
 
   document.getElementById('spAddBtn').addEventListener('click', ()=>{
     const name = document.getElementById('spNewName').value.trim();
@@ -975,19 +977,36 @@ function renderSpellsTab(){
     state.spells.push({
       id: uid(),
       name,
-      category: document.getElementById('spNewCat').value,
       level: parseInt(document.getElementById('spNewLevel').value,10),
       note: document.getElementById('spNewNote').value.trim(),
       usesPerDay: usesPerDay && usesPerDay > 0 ? usesPerDay : null,
       usesUsed: 0,
       bonusDie: document.getElementById('spNewBonus').checked,
-      tag: document.getElementById('spNewTag').value.trim(),
+      tags: parseTagsInput(document.getElementById('spNewTag').value),
     });
     renderSpellsTab();
   });
 
   document.getElementById('spTagFilter').addEventListener('input', e=>{ state.spellTagFilter = e.target.value; renderSpellsTab(); });
   document.getElementById('spTagFilterClear').addEventListener('click', ()=>{ state.spellTagFilter=''; renderSpellsTab(); });
+
+  pane.querySelectorAll('[data-edit-tags]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const id = b.dataset.editTags;
+      spellTagsEditingId = (spellTagsEditingId === id) ? null : id;
+      renderSpellsTab();
+    });
+  });
+  pane.querySelectorAll('[data-spell-tags]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const sp = state.spells.find(x=>x.id===inp.dataset.spellTags);
+      if(!sp) return;
+      sp.tags = parseTagsInput(inp.value);
+      spellTagsEditingId = null;
+      renderSpellsTab();
+    });
+    inp.addEventListener('keydown', ev=>{ if(ev.key==='Enter') inp.blur(); });
+  });
 
   pane.querySelectorAll('[data-del-spell]').forEach(b=>{
     b.addEventListener('click', ()=>{
@@ -1553,13 +1572,6 @@ const ENCY_CATEGORIES = [
 ];
 const ENCY_ADDABLE = {spells:true, weapons:true, magicitems:true};
 
-// ניחוש קטגוריה פנימית (קרבי/סביבתי/תועלתי) לפי אסכולת הלחש
-const SPELL_SCHOOL_CATEGORY = {
-  evocation:'combat', necromancy:'combat',
-  conjuration:'environmental', transmutation:'environmental', abjuration:'environmental',
-  illusion:'utility', enchantment:'utility', divination:'utility',
-};
-
 function encyName(item){ return item.name || item.title || item.slug || '—'; }
 
 function toast(msg){
@@ -1601,12 +1613,10 @@ function addSpellFromApi(sp){
     toast('הלחש כבר קיים בספר הלחשים'); return;
   }
   const level = (sp.level_int != null) ? sp.level_int : 0;
-  const school = (sp.school||'').toLowerCase();
   const note = [sp.school, sp.range, sp.duration].filter(Boolean).join(' · ');
   state.spells.push({
     id: uid(), name: sp.name,
-    category: SPELL_SCHOOL_CATEGORY[school] || 'utility',
-    level, note, usesPerDay:null, usesUsed:0, bonusDie:false, tag: sp.school||'',
+    level, note, usesPerDay:null, usesUsed:0, bonusDie:false, tags: sp.school ? [sp.school] : [],
   });
   saveState();
   toast('✓ הלחש נוסף לספר הלחשים שלך');
