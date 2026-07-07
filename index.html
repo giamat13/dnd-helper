@@ -328,6 +328,66 @@
 
   .footnote{ font-size:12px; color: var(--ink-faint); margin-top:10px; }
 
+  /* ---------- encyclopedia ---------- */
+  .ency-item{
+    display:flex; align-items:center; gap:12px;
+    background: var(--panel-3); border:1px solid var(--line-soft);
+    border-radius:7px; padding:10px 13px; margin-bottom:8px; cursor:pointer;
+    transition: border-color .12s, background .12s;
+  }
+  .ency-item:hover{ border-color: var(--gold-dim); background:#2a3247; }
+  .ency-item .e-name{ font-weight:700; color: var(--ink); flex:1; }
+  .ency-item .e-meta{ font-size:12px; color: var(--ink-dim); font-family: var(--font-mono); }
+  .ency-loader{ text-align:center; color: var(--utility); padding:26px 0; font-size:14px; }
+  .ency-spinner{
+    display:inline-block; width:22px; height:22px; margin-inline-end:10px; vertical-align:middle;
+    border:3px solid var(--line); border-top-color: var(--gold); border-radius:50%;
+    animation: ency-spin .8s linear infinite;
+  }
+  @keyframes ency-spin{ to{ transform: rotate(360deg); } }
+
+  .ency-overlay{
+    position: fixed; inset:0; background: rgba(7,9,14,.72);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding: 34px 16px; z-index: 100; overflow-y:auto;
+    animation: fade .15s ease;
+  }
+  .ency-modal{
+    background: var(--panel); border:1px solid var(--line);
+    border-radius: 14px; max-width: 720px; width:100%;
+    padding: 22px 24px 26px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .ency-modal-head{ display:flex; align-items:flex-start; gap:12px; margin-bottom:6px; }
+  .ency-modal-head h3{
+    font-family: var(--font-display); font-size:23px; color: var(--gold-bright);
+    margin:0; flex:1; font-weight:700;
+  }
+  .ency-modal-close{
+    background: var(--panel-3); border:1px solid var(--line); color: var(--ink-dim);
+    width:32px; height:32px; border-radius:8px; cursor:pointer; font-size:16px; flex-shrink:0;
+  }
+  .ency-modal-close:hover{ color: var(--combat); border-color: var(--combat-line); }
+  .ency-sub{ color: var(--ink-dim); font-size:13px; margin:0 0 14px; font-family: var(--font-mono); }
+  .ency-desc{ white-space: pre-wrap; font-size:14px; line-height:1.65; color: var(--ink); margin:8px 0; }
+  .ency-block{ background: var(--panel-2); border-radius:7px; padding:9px 12px; margin-bottom:7px; font-size:13.5px; line-height:1.6; }
+  .ency-section-title{ color: var(--gold); font-weight:700; font-size:13px; margin:16px 0 7px; font-family: var(--font-mono); letter-spacing:.5px; }
+  .ency-stats{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
+  .ency-stat{ background: var(--panel-3); border:1px solid var(--line); border-radius:7px; padding:6px 12px; text-align:center; min-width:58px; }
+  .ency-stat .s-lbl{ font-size:10.5px; color: var(--ink-faint); font-family: var(--font-mono); }
+  .ency-stat .s-val{ font-size:16px; font-weight:700; color: var(--ink); }
+  .ency-kv{ display:flex; gap:8px; font-size:13.5px; margin-bottom:4px; }
+  .ency-kv .k{ color: var(--ink-dim); min-width:120px; }
+  .ency-kv .v{ color: var(--ink); flex:1; }
+
+  .toast{
+    position: fixed; bottom: 26px; left:50%; transform: translateX(-50%) translateY(20px);
+    background: var(--nature-bg); border:1px solid var(--nature-line); color:#bfe6c9;
+    padding: 11px 20px; border-radius:9px; font-weight:600; font-size:14px;
+    box-shadow: 0 8px 26px rgba(0,0,0,.4); opacity:0; pointer-events:none;
+    transition: opacity .2s, transform .2s; z-index:200;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
   @media(max-width: 640px){
     .row{ flex-direction: column; }
     .row > div{ width:100%; }
@@ -396,6 +456,18 @@ const state = {
   silver: 0,
   copper: 0,
   inventory: [],
+
+  // אנציקלופדיה — נטען בזמן אמת מ-Open5e, לא נשמר ל-localStorage (רק הקטגוריה)
+  ency: {
+    category: 'spells',
+    query: '',
+    results: [],
+    next: null,
+    loading: false,
+    error: null,
+    fetched: false,
+    detail: null,
+  },
 };
 
 function uid(){ return Math.random().toString(36).slice(2,10); }
@@ -561,6 +633,7 @@ const TABS = [
   {id:'dice', label:'קוביות', dotColor:'var(--gold)'},
   {id:'resources', label:'משאבים', dotColor:'var(--nature)'},
   {id:'loot', label:'שלל וזהב', dotColor:'var(--gold)'},
+  {id:'ency', label:'אנציקלופדיה', dotColor:'var(--utility)'},
 ];
 
 function visibleTabs(){
@@ -588,6 +661,7 @@ function renderMain(){
     dice: renderDiceTab,
     resources: renderResourcesTab,
     loot: renderLootTab,
+    ency: renderEncyclopediaTab,
   };
   main.innerHTML = `<section class="pane active" id="pane-${state.activeTab}"></section>`;
   renderers[state.activeTab]();
@@ -596,14 +670,22 @@ function renderMain(){
 
 const STORAGE_KEY = 'dnd-helper-state';
 function saveState(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  try{
+    // תוצאות האנציקלופדיה נטענות מהרשת ואינן נשמרות — רק הקטגוריה שנבחרה
+    const {ency, ...rest} = state;
+    const persist = {...rest, ency: {category: ency ? ency.category : 'spells'}};
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persist));
+  }catch(e){}
 }
 function loadState(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return;
     const saved = JSON.parse(raw);
+    const savedEncyCat = saved.ency && saved.ency.category;
     Object.assign(state, saved);
+    // איפוס שדות האנציקלופדיה הזמניים (נטענים מחדש מ-Open5e בכל כניסה)
+    state.ency = {category: savedEncyCat || 'spells', query:'', results:[], next:null, loading:false, error:null, fetched:false, detail:null};
   }catch(e){}
 }
 
@@ -1446,6 +1528,349 @@ function renderLootTab(){
     state.inventory = state.inventory.filter(i=>i.id!==item.id);
     renderLootTab();
   }));
+
+  saveState();
+}
+
+/* =========================================================
+   7. אנציקלופדיה — ENCYCLOPEDIA (Open5e API, כל המקורות)
+   ========================================================= */
+const ENCY_CATEGORIES = [
+  {key:'spells',      endpoint:'spells',      label:'לחשים'},
+  {key:'monsters',    endpoint:'monsters',    label:'מפלצות'},
+  {key:'magicitems',  endpoint:'magicitems',  label:'פריטים קסומים'},
+  {key:'weapons',     endpoint:'weapons',     label:'נשקים'},
+  {key:'armor',       endpoint:'armor',       label:'שריון'},
+  {key:'races',       endpoint:'races',       label:'גזעים'},
+  {key:'classes',     endpoint:'classes',     label:'מקצועות'},
+  {key:'feats',       endpoint:'feats',       label:'כשרונות'},
+  {key:'conditions',  endpoint:'conditions',  label:'מצבים'},
+  {key:'backgrounds', endpoint:'backgrounds', label:'רקעים'},
+  {key:'planes',      endpoint:'planes',      label:'מישורים'},
+  {key:'sections',    endpoint:'sections',    label:'כללים'},
+  {key:'spelllist',   endpoint:'spelllist',   label:'רשימות לחשים'},
+  {key:'documents',   endpoint:'documents',   label:'מקורות'},
+];
+const ENCY_ADDABLE = {spells:true, weapons:true, magicitems:true};
+
+// ניחוש קטגוריה פנימית (קרבי/סביבתי/תועלתי) לפי אסכולת הלחש
+const SPELL_SCHOOL_CATEGORY = {
+  evocation:'combat', necromancy:'combat',
+  conjuration:'environmental', transmutation:'environmental', abjuration:'environmental',
+  illusion:'utility', enchantment:'utility', divination:'utility',
+};
+
+function encyName(item){ return item.name || item.title || item.slug || '—'; }
+
+function toast(msg){
+  let el = document.getElementById('toast');
+  if(!el){ el = document.createElement('div'); el.id='toast'; el.className='toast'; document.body.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(()=> el.classList.remove('show'), 2200);
+}
+
+function fmtDesc(text){
+  if(!text) return '';
+  let h = esc(String(text)).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  return `<div class="ency-desc">${h}</div>`;
+}
+function abilityBlocks(arr){
+  if(!Array.isArray(arr) || !arr.length) return '';
+  return arr.map(a=>`<div class="ency-block"><strong>${esc(a.name||'')}.</strong> ${esc(a.desc||a.description||'')}</div>`).join('');
+}
+function fmtSpeed(sp){
+  if(!sp) return '';
+  if(typeof sp === 'string') return sp;
+  return Object.entries(sp).map(([k,v])=> typeof v==='boolean' ? k : `${k} ${v}`).join(', ');
+}
+function parseCost(cost){
+  if(!cost) return 0;
+  const m = /([\d,.]+)\s*(gp|sp|cp)?/i.exec(String(cost));
+  if(!m) return 0;
+  let v = parseFloat(m[1].replace(/,/g,'')) || 0;
+  const unit = (m[2]||'gp').toLowerCase();
+  if(unit==='sp') v/=10; if(unit==='cp') v/=100;
+  return Math.round(v*100)/100;
+}
+
+/* ----- כפתורי הוספה ----- */
+function addSpellFromApi(sp){
+  if(state.spells.some(s => s.name.toLowerCase() === (sp.name||'').toLowerCase())){
+    toast('הלחש כבר קיים בספר הלחשים'); return;
+  }
+  const level = (sp.level_int != null) ? sp.level_int : 0;
+  const school = (sp.school||'').toLowerCase();
+  const note = [sp.school, sp.range, sp.duration].filter(Boolean).join(' · ');
+  state.spells.push({
+    id: uid(), name: sp.name,
+    category: SPELL_SCHOOL_CATEGORY[school] || 'utility',
+    level, note, usesPerDay:null, usesUsed:0, bonusDie:false, tag: sp.school||'',
+  });
+  saveState();
+  toast('✓ הלחש נוסף לספר הלחשים שלך');
+}
+function addWeaponFromApi(w){
+  const dmg = [w.damage_dice, w.damage_type].filter(Boolean).join(' ');
+  state.inventory.push({ id: uid(), name: w.name + (dmg?` (${dmg})`:''), qty:1, value: parseCost(w.cost) });
+  saveState();
+  toast('✓ הנשק נוסף לתרמיל השלל');
+}
+function addMagicItemFromApi(m){
+  state.inventory.push({ id: uid(), name: m.name + (m.rarity?` [${m.rarity}]`:''), qty:1, value:0 });
+  saveState();
+  toast('✓ הפריט נוסף לתרמיל השלל');
+}
+
+/* ----- שליפה מ-Open5e ----- */
+async function encyFetch(reset){
+  const cat = ENCY_CATEGORIES.find(c => c.key === state.ency.category);
+  if(!cat) return;
+  state.ency.loading = true;
+  state.ency.error = null;
+  if(reset){ state.ency.results = []; state.ency.next = null; }
+  renderEncyclopediaTab();
+  try{
+    let url = (!reset && state.ency.next) ? state.ency.next : null;
+    if(!url){
+      const q = state.ency.query.trim();
+      url = `https://api.open5e.com/v1/${cat.endpoint}/?limit=30${q?`&search=${encodeURIComponent(q)}`:''}`;
+    }
+    const res = await fetch(url);
+    if(!res.ok) throw new Error('http '+res.status);
+    const data = await res.json();
+    state.ency.results = state.ency.results.concat(data.results || []);
+    state.ency.next = data.next || null;
+  }catch(err){
+    console.warn('Open5e encyclopedia fetch failed:', err);
+    state.ency.error = 'שגיאה בטעינה מ-Open5e. בדקו את החיבור לרשת ונסו שוב.';
+  }finally{
+    state.ency.loading = false;
+    state.ency.fetched = true;
+    renderEncyclopediaTab();
+  }
+}
+
+/* ----- תקציר לשורת רשימה ----- */
+function encyItemMeta(cat, it){
+  switch(cat){
+    case 'spells':      return [it.level, it.school].filter(Boolean).join(' · ');
+    case 'monsters':    return [[it.size, it.type].filter(Boolean).join(' '), it.challenge_rating!=null?`CR ${it.challenge_rating}`:''].filter(Boolean).join(' · ');
+    case 'magicitems':  return [it.type, it.rarity].filter(Boolean).join(' · ');
+    case 'weapons':     return [it.damage_dice, it.damage_type].filter(Boolean).join(' ');
+    case 'armor':       return [it.category, it.ac_string].filter(Boolean).join(' · ');
+    case 'races':       return [it.size, fmtSpeed(it.speed)].filter(Boolean).join(' · ');
+    case 'classes':     return it.hit_dice ? `קובית חיים ${it.hit_dice}` : '';
+    case 'feats':       return it.prerequisite || '';
+    case 'backgrounds': return it.skill_proficiencies || '';
+    case 'sections':    return it.parent || '';
+    case 'documents':   return [it.organization, it.author].filter(Boolean).join(' · ');
+    case 'spelllist':   return Array.isArray(it.spells) ? `${it.spells.length} לחשים` : '';
+    default:            return '';
+  }
+}
+
+/* ----- תצוגת פירוט מלאה לפי סוג ----- */
+function encyDetailBody(cat, it){
+  const S = (t)=>`<div class="ency-section-title">${t}</div>`;
+  const kv = (k,v)=> v!=null && v!=='' ? `<div class="ency-kv"><span class="k">${k}</span><span class="v">${esc(String(v))}</span></div>` : '';
+
+  switch(cat){
+    case 'spells':{
+      const meta = [it.level, it.school, it.casting_time, it.range, it.duration, it.components,
+        it.concentration==='yes'||it.concentration===true?'ריכוז':'', it.ritual==='yes'||it.ritual===true?'טקס':'', it.dnd_class]
+        .filter(Boolean).join(' · ');
+      return `<p class="ency-sub">${esc(meta)}</p>${fmtDesc(it.desc)}${it.higher_level?S('ברמה גבוהה יותר')+fmtDesc(it.higher_level):''}`;
+    }
+    case 'monsters':{
+      const abil = [['str','כוח','strength'],['dex','זריזות','dexterity'],['con','חוסן','constitution'],
+        ['int','תבונה','intelligence'],['wis','חוכמה','wisdom'],['cha','כריזמה','charisma']];
+      const stats = abil.map(([,lbl,f])=>`<div class="ency-stat"><div class="s-val">${it[f]!=null?it[f]:'—'}</div><div class="s-lbl">${lbl}</div></div>`).join('');
+      const saves = abil.map(([,lbl,f])=> it[f+'_save']!=null ? `${lbl} +${it[f+'_save']}` : null).filter(Boolean).join(', ');
+      const skills = (it.skills && typeof it.skills==='object')
+        ? Object.entries(it.skills).map(([k,v])=>`${k} ${v>=0?'+':''}${v}`).join(', ')
+        : (it.skills || '');
+      return `<p class="ency-sub">${esc([it.size, it.type, it.alignment].filter(Boolean).join(' · '))}</p>
+        ${kv('דרגת מסוכנות (CR)', it.challenge_rating)}
+        ${kv('שריון (AC)', [it.armor_class, it.armor_desc].filter(Boolean).join(' '))}
+        ${kv('נקודות חיים', [it.hit_points, it.hit_dice?`(${it.hit_dice})`:''].filter(Boolean).join(' '))}
+        ${kv('מהירות', fmtSpeed(it.speed))}
+        <div class="ency-stats">${stats}</div>
+        ${kv('הצלות', saves)}
+        ${kv('מיומנויות', skills)}
+        ${kv('חסינויות נזק', it.damage_immunities || '')}
+        ${kv('התנגדויות נזק', it.damage_resistances || '')}
+        ${kv('פגיעות נזק', it.damage_vulnerabilities || '')}
+        ${kv('חסינויות מצב', it.condition_immunities || '')}
+        ${kv('חושים', it.senses || '')}
+        ${kv('שפות', it.languages || '')}
+        ${it.special_abilities&&it.special_abilities.length?S('יכולות מיוחדות')+abilityBlocks(it.special_abilities):''}
+        ${it.actions&&it.actions.length?S('פעולות')+abilityBlocks(it.actions):''}
+        ${it.reactions&&it.reactions.length?S('תגובות')+abilityBlocks(it.reactions):''}
+        ${it.legendary_actions&&it.legendary_actions.length?S('פעולות אגדיות')+abilityBlocks(it.legendary_actions):''}`;
+    }
+    case 'weapons':
+      return `${kv('קטגוריה', it.category)}${kv('נזק', [it.damage_dice, it.damage_type].filter(Boolean).join(' '))}
+        ${kv('תכונות', Array.isArray(it.properties)?it.properties.join(', '):it.properties)}
+        ${kv('מחיר', it.cost)}${kv('משקל', it.weight)}`;
+    case 'armor':
+      return `${kv('קטגוריה', it.category)}${kv('דירוג שריון (AC)', it.ac_string)}
+        ${kv('דרישת כוח', it.strength_requirement)}${kv('חיסרון בהתגנבות', it.stealth_disadvantage?'כן':'לא')}
+        ${kv('מחיר', it.cost)}${kv('משקל', it.weight)}`;
+    case 'magicitems':
+      return `<p class="ency-sub">${esc([it.type, it.rarity, (it.requires_attunement && it.requires_attunement!=='')?'דורש כוונון':''].filter(Boolean).join(' · '))}</p>${fmtDesc(it.desc)}`;
+    case 'races':
+      return `${kv('העלאת מאפיינים', it.asi_desc?String(it.asi_desc).replace(/\*/g,''):'')}
+        ${kv('גודל', it.size||it.size_raw)}${kv('מהירות', fmtSpeed(it.speed))}${kv('ראייה', it.vision)}
+        ${kv('גיל', it.age)}${kv('נטייה', it.alignment)}${kv('שפות', it.languages)}
+        ${it.traits?S('תכונות גזע')+fmtDesc(it.traits):''}`;
+    case 'classes':
+      return `${kv('קובית חיים', it.hit_dice)}${kv('הצלות מיומנות', it.prof_saving_throws)}
+        ${kv('שריון', it.prof_armor)}${kv('נשקים', it.prof_weapons)}${kv('כלים', it.prof_tools)}
+        ${kv('מיומנויות', it.prof_skills)}${kv('יכולת הטלת קסמים', it.spellcasting_ability)}
+        ${it.desc?S('תיאור')+fmtDesc(it.desc):''}`;
+    case 'feats':
+      return `${kv('דרישת קדם', it.prerequisite)}${fmtDesc(it.desc)}`;
+    case 'backgrounds':
+      return `${kv('מיומנויות', it.skill_proficiencies)}${kv('כלים', it.tool_proficiencies)}${kv('שפות', it.languages)}
+        ${kv('ציוד', it.equipment)}${fmtDesc(it.desc)}
+        ${it.feature?S(it.feature)+fmtDesc(it.feature_desc):''}`;
+    case 'conditions':
+    case 'planes':
+    case 'sections':
+      return fmtDesc(it.desc);
+    case 'spelllist':
+      return `${fmtDesc(it.desc)}${Array.isArray(it.spells)?S(`לחשים (${it.spells.length})`)+`<div class="ency-desc">${esc(it.spells.map(s=>String(s).replace(/-/g,' ')).join(', '))}</div>`:''}`;
+    case 'documents':
+      return `${kv('מחבר', it.author)}${kv('ארגון', it.organization)}${kv('רישיון', it.license)}${fmtDesc(it.desc)}`;
+    default:
+      return fmtDesc(it.desc);
+  }
+}
+
+function encyDetailModal(){
+  const it = state.ency.detail;
+  if(!it) return '';
+  const cat = state.ency.category;
+  let addBtn = '';
+  if(cat==='spells')     addBtn = `<button class="btn gold" id="encyAdd" style="margin-top:16px;">＋ הוסף לספר הלחשים שלי</button>`;
+  if(cat==='weapons')    addBtn = `<button class="btn gold" id="encyAdd" style="margin-top:16px;">＋ הוסף לתרמיל השלל</button>`;
+  if(cat==='magicitems') addBtn = `<button class="btn gold" id="encyAdd" style="margin-top:16px;">＋ הוסף לתרמיל השלל</button>`;
+  return `
+    <div class="ency-overlay" id="encyOverlay">
+      <div class="ency-modal">
+        <div class="ency-modal-head">
+          <h3>${esc(encyName(it))}</h3>
+          <button class="ency-modal-close" id="encyClose" aria-label="סגור">✕</button>
+        </div>
+        ${encyDetailBody(cat, it)}
+        ${addBtn}
+      </div>
+    </div>`;
+}
+
+function renderEncyclopediaTab(){
+  const pane = document.getElementById('pane-ency');
+  if(!pane) return;
+  const e = state.ency;
+  const cat = ENCY_CATEGORIES.find(c => c.key === e.category);
+
+  let listHtml;
+  if(e.loading && !e.results.length){
+    listHtml = `<div class="ency-loader"><span class="ency-spinner"></span>טוען מ-Open5e...</div>`;
+  }else if(e.error){
+    listHtml = `<div class="empty-state">${e.error}</div>`;
+  }else if(!e.results.length){
+    listHtml = `<div class="empty-state">לא נמצאו תוצאות${e.query?` עבור "${esc(e.query)}"`:''}.</div>`;
+  }else{
+    listHtml = e.results.map((it,idx)=>{
+      const meta = encyItemMeta(e.category, it);
+      const quick = ENCY_ADDABLE[e.category]
+        ? `<button class="btn small gold" data-ency-quickadd="${idx}" title="הוסף">＋</button>` : '';
+      return `<div class="ency-item" data-ency-open="${idx}">
+        <span class="e-name">${esc(encyName(it))}</span>
+        ${meta?`<span class="e-meta">${esc(meta)}</span>`:''}
+        ${quick}
+      </div>`;
+    }).join('');
+  }
+
+  pane.innerHTML = `
+    <h2 class="pane-title">אנציקלופדיה — D&amp;D 5E</h2>
+    <p class="pane-note">עיון חי בכל תוכן ה-SRD דרך <a href="https://open5e.com" target="_blank" rel="noopener" style="color:var(--gold-bright);">Open5e API</a>: מפלצות, לחשים, פריטים, גזעים, מקצועות ועוד. לחצו על פריט לפרטים מלאים. בלחשים, נשקים ופריטים קסומים יש כפתור הוספה ישירות לדמות שלכם.</p>
+
+    <div class="chip-row">
+      ${ENCY_CATEGORIES.map(c=>`<div class="chip ${c.key===e.category?'active':''}" data-ency-cat="${c.key}" style="${c.key===e.category?'color:var(--gold-bright);border-color:var(--gold);':''}">${c.label}</div>`).join('')}
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div style="flex:3"><label class="field-label">חיפוש ב${esc(cat?cat.label:'')}</label><input type="text" id="encySearch" value="${esc(e.query)}" placeholder="הקלידו שם ולחצו חיפוש..."></div>
+        <div><button class="btn gold" id="encySearchBtn" style="width:100%;">חיפוש</button></div>
+        ${e.query?`<div><button class="btn" id="encyClear" style="width:100%;">נקה</button></div>`:''}
+      </div>
+
+      <div id="encyList" style="margin-top:16px;">${listHtml}</div>
+
+      ${e.next ? `<div class="row" style="margin-top:6px;"><button class="btn" id="encyMore" style="flex:1;" ${e.loading?'disabled':''}>${e.loading?'טוען...':'טען עוד תוצאות'}</button></div>` : ''}
+    </div>
+
+    ${encyDetailModal()}
+  `;
+
+  // טעינה ראשונית אוטומטית של הקטגוריה הנוכחית
+  if(!e.fetched && !e.loading){ encyFetch(true); return; }
+
+  // בחירת קטגוריה
+  pane.querySelectorAll('[data-ency-cat]').forEach(chip=>{
+    chip.addEventListener('click', ()=>{
+      if(e.category === chip.dataset.encyCat) return;
+      e.category = chip.dataset.encyCat;
+      e.query = ''; e.results = []; e.next = null; e.fetched = false; e.detail = null;
+      renderEncyclopediaTab();
+    });
+  });
+
+  // חיפוש
+  const searchInput = document.getElementById('encySearch');
+  searchInput.addEventListener('input', ev=>{ e.query = ev.target.value; });
+  searchInput.addEventListener('keydown', ev=>{ if(ev.key==='Enter') encyFetch(true); });
+  document.getElementById('encySearchBtn').addEventListener('click', ()=> encyFetch(true));
+  document.getElementById('encyClear')?.addEventListener('click', ()=>{ e.query=''; encyFetch(true); });
+  document.getElementById('encyMore')?.addEventListener('click', ()=> encyFetch(false));
+
+  // פתיחת פירוט
+  pane.querySelectorAll('[data-ency-open]').forEach(row=>{
+    row.addEventListener('click', ev=>{
+      if(ev.target.closest('[data-ency-quickadd]')) return; // כפתור ההוספה מטופל בנפרד
+      e.detail = e.results[parseInt(row.dataset.encyOpen,10)];
+      renderEncyclopediaTab();
+    });
+  });
+
+  // הוספה מהירה מהרשימה
+  pane.querySelectorAll('[data-ency-quickadd]').forEach(btn=>{
+    btn.addEventListener('click', ev=>{
+      ev.stopPropagation();
+      const it = e.results[parseInt(btn.dataset.encyQuickadd,10)];
+      if(e.category==='spells') addSpellFromApi(it);
+      else if(e.category==='weapons') addWeaponFromApi(it);
+      else if(e.category==='magicitems') addMagicItemFromApi(it);
+    });
+  });
+
+  // מודל הפירוט
+  document.getElementById('encyClose')?.addEventListener('click', ()=>{ e.detail=null; renderEncyclopediaTab(); });
+  document.getElementById('encyOverlay')?.addEventListener('click', ev=>{
+    if(ev.target.id==='encyOverlay'){ e.detail=null; renderEncyclopediaTab(); }
+  });
+  document.getElementById('encyAdd')?.addEventListener('click', ()=>{
+    const it = e.detail;
+    if(e.category==='spells') addSpellFromApi(it);
+    else if(e.category==='weapons') addWeaponFromApi(it);
+    else if(e.category==='magicitems') addMagicItemFromApi(it);
+  });
 
   saveState();
 }
