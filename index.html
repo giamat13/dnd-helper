@@ -368,7 +368,14 @@
   }
   .ency-modal-close:hover{ color: var(--combat); border-color: var(--combat-line); }
   .ency-sub{ color: var(--ink-dim); font-size:13px; margin:0 0 14px; font-family: var(--font-mono); }
-  .ency-desc{ white-space: pre-wrap; font-size:14px; line-height:1.65; color: var(--ink); margin:8px 0; }
+  .ency-desc{ font-size:14px; line-height:1.65; color: var(--ink); margin:8px 0; }
+  .ency-desc p{ margin:0 0 10px; white-space: pre-wrap; }
+  .ency-desc p:last-child{ margin-bottom:0; }
+  .ency-table-wrap{ overflow-x:auto; margin:10px 0; }
+  .ency-table{ border-collapse:collapse; width:100%; font-size:13px; }
+  .ency-table th, .ency-table td{ border:1px solid var(--line); padding:6px 10px; }
+  .ency-table th{ background: var(--panel-2); color: var(--gold-bright); font-family: var(--font-mono); font-size:12px; white-space:nowrap; }
+  .ency-table tbody tr:nth-child(even) td{ background: rgba(255,255,255,.02); }
   .ency-block{ background: var(--panel-2); border-radius:7px; padding:9px 12px; margin-bottom:7px; font-size:13.5px; line-height:1.6; }
   .ency-section-title{ color: var(--gold); font-weight:700; font-size:13px; margin:16px 0 7px; font-family: var(--font-mono); letter-spacing:.5px; }
   .ency-stats{ display:flex; gap:8px; flex-wrap:wrap; margin:10px 0; }
@@ -1583,10 +1590,34 @@ function toast(msg){
   el._t = setTimeout(()=> el.classList.remove('show'), 2200);
 }
 
+function mdInline(raw){
+  let h = esc(String(raw||''));
+  h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/_([^_\n]+)_/g, '<em>$1</em>');
+  return h;
+}
+function mdTableRow(line){
+  return line.trim().replace(/^\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim());
+}
+function mdTable(lines){
+  const header = mdTableRow(lines[0]);
+  const rows = lines.slice(2).filter(l=>l.trim()).map(mdTableRow);
+  const thead = `<tr>${header.map(h=>`<th>${mdInline(h)}</th>`).join('')}</tr>`;
+  const tbody = rows.map(r=>`<tr>${r.map(c=>`<td>${mdInline(c)}</td>`).join('')}</tr>`).join('');
+  return `<div class="ency-table-wrap"><table class="ency-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+}
 function fmtDesc(text){
   if(!text) return '';
-  let h = esc(String(text)).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  return `<div class="ency-desc">${h}</div>`;
+  const blocks = String(text).split(/\n{2,}/);
+  const html = blocks.map(block=>{
+    const lines = block.split('\n');
+    // טבלת markdown: שורת כותרות עם | ואחריה שורת מפריד כמו |---|---|
+    if(lines.length >= 2 && /^\s*\|.*\|\s*$/.test(lines[0]) && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[1])){
+      return mdTable(lines);
+    }
+    return `<p>${mdInline(block).replace(/\n/g,'<br>')}</p>`;
+  }).join('');
+  return `<div class="ency-desc">${html}</div>`;
 }
 function abilityBlocks(arr){
   if(!Array.isArray(arr) || !arr.length) return '';
