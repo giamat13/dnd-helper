@@ -1593,29 +1593,87 @@ function toast(msg){
 function mdInline(raw){
   let h = esc(String(raw||''));
   h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  h = h.replace(/__(.+?)__/g, '<strong>$1</strong>');
   h = h.replace(/_([^_\n]+)_/g, '<em>$1</em>');
   return h;
+}
+function isTableRow(line){ return /^\s*\|.*\|\s*$/.test(line); }
+function isTableStart(line){ return /^\s*\|/.test(line); } // שורה שמתחילה ב-| גם אם אין | סוגר (טקסט זר נדבק בסוף בגלל שגיאת מקור)
+function isTableSep(line){ return /^\s*[|:\s-]+$/.test(line) && line.includes('-'); }
+// לעיתים כיתוב/משפט רגיל נדבק לכותרת הטבלה בלי ירידת שורה כלל (שגיאת מקור ב-Open5e) —
+// מזהים לפי ה-| הראשון בשורה: כל מה שלפניו הוא טקסט רגיל, וממנו והלאה היא כותרת הטבלה
+function splitGluedTableHead(line){
+  const firstPipe = line.indexOf('|');
+  if(firstPipe <= 0) return null;
+  const prose = line.slice(0, firstPipe).trim();
+  const tail = line.slice(firstPipe).trim();
+  if(!prose || (tail.match(/\|/g)||[]).length < 2) return null;
+  return { prose, tableTail: tail };
 }
 function mdTableRow(line){
   return line.trim().replace(/^\|/,'').replace(/\|\s*$/,'').split('|').map(c=>c.trim());
 }
 function mdTable(lines){
   const header = mdTableRow(lines[0]);
-  const rows = lines.slice(2).filter(l=>l.trim()).map(mdTableRow);
+  const cols = header.length;
+  let trailing = '';
+  const rows = lines.slice(2).filter(l=>l.trim()).map(line=>{
+    const cells = mdTableRow(line);
+    if(cells.length > cols){
+      // שורה אחרונה שנדבק אליה טקסט זר בסוף בלי | סוגר — חותכים לפי מספר העמודות של הכותרת
+      trailing += ' ' + cells.slice(cols).join(' ');
+      return cells.slice(0, cols);
+    }
+    return cells;
+  });
   const thead = `<tr>${header.map(h=>`<th>${mdInline(h)}</th>`).join('')}</tr>`;
   const tbody = rows.map(r=>`<tr>${r.map(c=>`<td>${mdInline(c)}</td>`).join('')}</tr>`).join('');
-  return `<div class="ency-table-wrap"><table class="ency-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  const table = `<div class="ency-table-wrap"><table class="ency-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  return trailing.trim() ? table + `<p>${mdInline(trailing.trim())}</p>` : table;
 }
 function fmtDesc(text){
   if(!text) return '';
+  // מפצלים לבלוקים לפי שורה ריקה, אבל בתוך כל בלוק סורקים שורה-שורה —
+  // כי לעיתים כותרת/כיתוב טבלה מופרד מהטבלה עצמה בירידת שורה בודדת בלבד (לא ריקה),
+  // או אפילו נדבק אליה בלי שום ירידת שורה (שגיאות מקור ב-Open5e) —
+  // כך שהטבלה לא בהכרח פותחת את הבלוק/השורה.
   const blocks = String(text).split(/\n{2,}/);
   const html = blocks.map(block=>{
     const lines = block.split('\n');
-    // טבלת markdown: שורת כותרות עם | ואחריה שורת מפריד כמו |---|---|
-    if(lines.length >= 2 && /^\s*\|.*\|\s*$/.test(lines[0]) && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[1])){
-      return mdTable(lines);
+    let out = '';
+    let para = [];
+    const flushPara = ()=>{
+      const joined = para.join('\n').trim();
+      if(joined) out += `<p>${mdInline(joined).replace(/\n/g,'<br>')}</p>`;
+      para = [];
+    };
+    for(let i=0; i<lines.length; i++){
+      let line = lines[i];
+      let glued = null;
+      if(!isTableStart(line)) glued = splitGluedTableHead(line);
+      const headLine = glued ? glued.tableTail : line;
+      if(isTableStart(headLine) && i+1<lines.length && isTableSep(lines[i+1])){
+        if(glued) para.push(glued.prose);
+        flushPara();
+        const rowLines = [headLine, lines[i+1]];
+        let j = i+2;
+        while(j<lines.length && isTableStart(lines[j])){
+          const terminated = isTableRow(lines[j]);
+          rowLines.push(lines[j]);
+          j++;
+          if(!terminated) break; // שורה בלי | סוגר = סוף הטבלה, טקסט זר בהמשך יוצא כפסקה נפרדת
+        }
+        out += mdTable(rowLines);
+        i = j-1;
+      }else if(/^#{2,4}\s+\S/.test(line)){
+        flushPara();
+        out += `<div class="ency-section-title">${mdInline(line.replace(/^#{2,4}\s+/,''))}</div>`;
+      }else{
+        para.push(line);
+      }
     }
-    return `<p>${mdInline(block).replace(/\n/g,'<br>')}</p>`;
+    flushPara();
+    return out;
   }).join('');
   return `<div class="ency-desc">${html}</div>`;
 }
