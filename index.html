@@ -463,16 +463,27 @@ const state = {
   copper: 0,
   inventory: [],
 
+  // חברי הקבוצה — רשימת שמות קבועה (לא מתאפסת בין קרבות), משמשת את מד הפציעה בעוזר הקרב
+  party: [],
+
   // אנציקלופדיה — נטען בזמן אמת מ-Open5e, לא נשמר ל-localStorage (רק הקטגוריה)
   ency: {
     category: 'spells',
     query: '',
+    filters: {},
     results: [],
     next: null,
     loading: false,
     error: null,
     fetched: false,
     detail: null,
+  },
+
+  // עוזר קרב — מוצג בכל קרב, נשמר ל-localStorage כמו שאר הדמות
+  // wounds: מיפוי partyMemberId -> סטטוס פציעה, מתאפס ב"קרב חדש" (בניגוד לרשימת party עצמה)
+  combat: {
+    wounds: {},
+    monsters: [],
   },
 };
 
@@ -634,6 +645,7 @@ function currentClassIsCaster(){
    ========================================================= */
 const TABS = [
   {id:'setup', label:'הגדרת דמות', dotColor:'var(--gold)'},
+  {id:'combat', label:'עוזר קרב', dotColor:'var(--combat)'},
   {id:'spells', label:'לוחשות', dotColor:'var(--utility)', visible:()=>currentClassIsCaster()},
   {id:'fighter', label:'לוחם', dotColor:'var(--combat)', visible:()=>!currentClassIsCaster()},
   {id:'dice', label:'קוביות', dotColor:'var(--gold)'},
@@ -662,6 +674,7 @@ function renderMain(){
   const main = document.getElementById('mainPane');
   const renderers = {
     setup: renderSetupTab,
+    combat: renderCombatTab,
     spells: renderSpellsTab,
     fighter: renderFighterTab,
     dice: renderDiceTab,
@@ -691,12 +704,18 @@ function loadState(){
     const savedEncyCat = saved.ency && saved.ency.category;
     Object.assign(state, saved);
     // איפוס שדות האנציקלופדיה הזמניים (נטענים מחדש מ-Open5e בכל כניסה)
-    state.ency = {category: savedEncyCat || 'spells', query:'', results:[], next:null, loading:false, error:null, fetched:false, detail:null};
+    state.ency = {category: savedEncyCat || 'spells', query:'', filters:{}, results:[], next:null, loading:false, error:null, fetched:false, detail:null};
     // מיגרציה: לחשים ישנים השתמשו ב-category ובתג יחיד (tag) — כעת יש רק מערך tags
     state.spells.forEach(s=>{
       if(!Array.isArray(s.tags)) s.tags = s.tag ? [s.tag] : [];
       delete s.tag; delete s.category;
     });
+    // מיגרציה: מד הפציעה הישן היה מונה אנונימי {dying,heavy,medium,light} — כעת מיפוי לפי מזהה חבר קבוצה
+    const legacyWoundKeys = ['dying','heavy','medium','light'];
+    if(state.combat && state.combat.wounds && legacyWoundKeys.some(k=>typeof state.combat.wounds[k] === 'number')){
+      state.combat.wounds = {};
+    }
+    if(!Array.isArray(state.party)) state.party = [];
   }catch(e){}
 }
 
@@ -1559,6 +1578,371 @@ function renderLootTab(){
 }
 
 /* =========================================================
+   6.5 עוזר קרב — COMBAT ASSISTANT
+   ========================================================= */
+
+// מיפוי בין סוגי נזק (כפי שמופיעים ב-Open5e) למילות מפתח בעברית —
+// כדי לנחש איזה סוג נזק לחש גורם מתוך התג/ההערה שהמשתמש כתב בספר הלחשים שלו
+const DAMAGE_TYPE_HE = {
+  acid: ['חומצ'], bludgeoning: ['מכ','חבט'], cold: ['קור'], fire: ['אש'],
+  force: ['כוח','פורס'], lightning: ['ברק','חשמל'], necrotic: ['נמק'],
+  piercing: ['דקיר','חדיר'], poison: ['רעל'], psychic: ['נפש','מנט'],
+  radiant: ['קורן','זוהר'], slashing: ['חית','חתיכ'], thunder: ['רעם'],
+};
+const DAMAGE_TYPE_LABELS = {
+  acid:'חומצה', bludgeoning:'מכות', cold:'קור', fire:'אש', force:'כוח',
+  lightning:'ברק', necrotic:'נמק', piercing:'דקירה', poison:'רעל',
+  psychic:'נפשי', radiant:'קורן', slashing:'חיתוך', thunder:'רעם',
+};
+function guessSpellDamageTypes(spell){
+  const text = [spell.name, spell.note, ...(spell.tags||[])].join(' ').toLowerCase();
+  return Object.entries(DAMAGE_TYPE_HE).filter(([,keys]) => keys.some(k=>text.includes(k))).map(([dt])=>dt);
+}
+const WOUND_STATUS_LABELS = {healthy:'בריא', light:'פצוע קל', medium:'פצוע בינוני', heavy:'פצוע קשה', dying:'גוסס'};
+const WOUND_STATUS_COLORS = {healthy:'var(--nature)', light:'var(--gold)', medium:'var(--utility)', heavy:'var(--combat)', dying:'var(--combat)'};
+function canHeal(){
+  return state.spells.some(s => [s.name, s.note, ...(s.tags||[])].join(' ').includes('ריפוי'));
+}
+function splitDamageTypeList(str){
+  return String(str||'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
+}
+function newMonsterGroup(overrides){
+  return Object.assign({
+    id: uid(), label:'מפלצת לא ידועה', count:1, known:null, hp:[],
+    clues:{ hpMin:null, hpMax:null, type:'', size:'', cr:'', damageTests:[] },
+    candidates:[], candidatesLoading:false, damageLog:[],
+  }, overrides);
+}
+function setMonsterCount(g, n){
+  n = Math.max(1, parseInt(n,10)||1);
+  g.count = n;
+  if(g.known){
+    while(g.hp.length < n) g.hp.push({cur:g.known.hit_points, max:g.known.hit_points});
+    g.hp.length = n;
+  }
+}
+// בודק אם מפלצת מועמדת עדיין תואמת לכל הרמזים שנאספו (טווח חיים, תגובות לסוגי נזק)
+function monsterMatchesClues(mon, clues){
+  if(clues.hpMin!=null && mon.hit_points < clues.hpMin) return false;
+  if(clues.hpMax!=null && mon.hit_points > clues.hpMax) return false;
+  const res = splitDamageTypeList(mon.damage_resistances);
+  const imm = splitDamageTypeList(mon.damage_immunities);
+  const vul = splitDamageTypeList(mon.damage_vulnerabilities);
+  const has = arr => arr.some(x=>x.includes(clues._t));
+  for(const t of clues.damageTests){
+    clues._t = t.type;
+    if(t.result==='immune' && !has(imm)) return false;
+    if(t.result==='resisted' && !has(imm) && !has(res)) return false;
+    if(t.result==='vulnerable' && !has(vul)) return false;
+    if(t.result==='normal' && (has(imm)||has(res))) return false;
+  }
+  delete clues._t;
+  return true;
+}
+function checkForIdentification(group){
+  if(!group.known && group.candidates.length === 1) identifyMonster(group, group.candidates[0]);
+}
+function identifyMonster(group, mon){
+  group.known = mon;
+  group.label = mon.name;
+  group.hp = Array.from({length:group.count}, ()=>({cur:mon.hit_points, max:mon.hit_points}));
+  toast(`🎯 זוהתה מפלצת: ${mon.name}!`);
+}
+async function searchMonsterCandidates(group){
+  group.candidatesLoading = true; renderCombatTab();
+  try{
+    const params = new URLSearchParams();
+    params.set('limit','50');
+    if(group.clues.type) params.set('type', group.clues.type);
+    if(group.clues.size) params.set('size', group.clues.size);
+    if(group.clues.cr) params.set('cr', group.clues.cr);
+    const res = await fetch(`https://api.open5e.com/v1/monsters/?${params.toString()}`);
+    if(!res.ok) throw new Error('http '+res.status);
+    const data = await res.json();
+    group.candidates = (data.results||[]).filter(m=>monsterMatchesClues(m, group.clues));
+    checkForIdentification(group);
+  }catch(err){
+    toast('שגיאה בחיפוש מועמדים מ-Open5e');
+  }finally{
+    group.candidatesLoading = false;
+    renderCombatTab();
+  }
+}
+function refilterCandidates(group){
+  if(group.candidates.length) group.candidates = group.candidates.filter(m=>monsterMatchesClues(m, group.clues));
+  checkForIdentification(group);
+}
+
+function renderMonsterGroupCard(g){
+  const woundHeader = `
+    <div class="row" style="align-items:flex-end; margin-bottom:10px;">
+      <div style="flex:2;"><label class="field-label">כינוי</label><input type="text" data-monster-label="${g.id}" value="${esc(g.label)}" ${g.known?'readonly':''}></div>
+      <div style="max-width:110px;"><label class="field-label">כמות</label><input type="number" min="1" data-monster-count="${g.id}" value="${g.count}"></div>
+      <div><button class="icon-btn" data-monster-remove="${g.id}" title="הסר">✕</button></div>
+    </div>`;
+
+  let body;
+  if(g.known){
+    const mon = g.known;
+    const res = splitDamageTypeList(mon.damage_resistances);
+    const imm = splitDamageTypeList(mon.damage_immunities);
+    const vul = splitDamageTypeList(mon.damage_vulnerabilities);
+    const badges = (arr,label) => arr.length ? `<div class="footnote"><strong>${label}:</strong> ${arr.map(esc).join(', ')}</div>` : '';
+    const hpRows = g.hp.map((h,i)=>`
+      <div class="row tight" style="align-items:center; margin-bottom:6px;">
+        <span style="min-width:70px;">מופע ${i+1}</span>
+        <div><input type="number" data-monster-hp="${g.id}:${i}" value="${h.cur}" min="0" max="${h.max}"></div>
+        <span style="color:var(--ink-faint);">/ ${h.max}</span>
+      </div>`).join('');
+    const suggestions = state.spells.map(s=>({s, types:guessSpellDamageTypes(s)})).filter(x=>x.types.length).map(({s,types})=>{
+      const good = types.some(t=>vul.includes(t));
+      const bad = types.some(t=>res.includes(t)||imm.includes(t));
+      const note = good ? ' — יעיל! (המפלצת פגיעה לזה)' : (bad ? ' — לא יעיל (עמידה/חסינה)' : '');
+      return `<div class="list-item"><span class="grow">${esc(s.name)}${note}</span></div>`;
+    }).join('') || `<div class="empty-state">אין בספר הלחשים שלך לחש עם סוג נזק שזוהה אוטומטית.</div>`;
+
+    body = `
+      <p class="ency-sub">${esc([mon.size, mon.type].filter(Boolean).join(' '))} · CR ${esc(mon.challenge_rating)} · AC ${esc(mon.armor_class)}</p>
+      ${badges(vul,'חולשות')}${badges(res,'עמידויות')}${badges(imm,'חסינויות')}
+      <div class="ency-section-title">חיים (HP)</div>
+      ${hpRows}
+      <div class="ency-section-title">לחשים מומלצים מהספר שלי</div>
+      ${suggestions}
+    `;
+  }else{
+    const filterSelects = ENCY_FILTERS.monsters.map(f=>`
+      <div><label class="field-label">${esc(f.label)}</label>
+        <select data-clue-filter="${g.id}:${f.param}">
+          <option value="">לא ידוע</option>
+          ${f.options.map(o=>`<option value="${esc(o)}" ${g.clues[f.param]===o?'selected':''}>${esc(o)}</option>`).join('')}
+        </select>
+      </div>`).join('');
+
+    const dtOptions = Object.entries(DAMAGE_TYPE_LABELS).map(([k,l])=>`<option value="${k}">${esc(l)}</option>`).join('');
+    const resultLabels = {immune:'חסין (בלי נזק)', resisted:'עמיד (חצי נזק)', vulnerable:'פגיע (נזק כפול)', normal:'נזק רגיל'};
+    const testsList = g.clues.damageTests.map((t,i)=>`
+      <div class="list-item"><span class="grow">${esc(DAMAGE_TYPE_LABELS[t.type]||t.type)} — ${resultLabels[t.result]}</span>
+        <button class="icon-btn" data-clue-test-del="${g.id}:${i}">✕</button></div>`).join('');
+
+    const candidatesBox = g.candidatesLoading
+      ? `<div class="ency-loader"><span class="ency-spinner"></span>מחפש מועמדים...</div>`
+      : g.candidates.length
+        ? `<div class="footnote">${g.candidates.length} מועמדים אפשריים לפי הרמזים:</div>` +
+          g.candidates.slice(0,20).map((m,i)=>`
+            <div class="list-item"><span class="grow">${esc(m.name)} <span style="color:var(--ink-faint);">(${esc(m.document__title||'')} · CR ${esc(m.challenge_rating)} · ${m.hit_points} חיים)</span></span>
+              <button class="btn small gold" data-clue-pick="${g.id}:${i}">זו היא!</button></div>`).join('')
+        : `<div class="empty-state">אין עדיין מועמדים — לחצו "חפש מועמדים" כדי לשלוף מ-Open5e.</div>`;
+
+    body = `
+      <div class="ency-section-title">חיפוש מועמדים (מה ידוע עליה מראש)</div>
+      <div class="row">${filterSelects}
+        <div><button class="btn gold" data-clue-search="${g.id}" style="width:100%;">חפש מועמדים</button></div>
+      </div>
+      <div style="margin:8px 0 14px;">${candidatesBox}</div>
+
+      <div class="ency-section-title">רמז: טווח חיים ("בין X ל-Y חיים")</div>
+      <div class="row">
+        <div><label class="field-label">מינימום</label><input type="number" data-clue-hpmin="${g.id}" value="${g.clues.hpMin??''}"></div>
+        <div><label class="field-label">מקסימום</label><input type="number" data-clue-hpmax="${g.id}" value="${g.clues.hpMax??''}"></div>
+        <div><button class="btn" data-clue-hpapply="${g.id}" style="width:100%;">החל רמז</button></div>
+      </div>
+
+      <div class="ency-section-title">רמז: מה קרה כשניסינו סוג נזק מסוים</div>
+      <div class="row">
+        <div><label class="field-label">סוג נזק</label><select data-clue-dt-type="${g.id}">${dtOptions}</select></div>
+        <div><label class="field-label">תוצאה</label>
+          <select data-clue-dt-result="${g.id}">
+            <option value="normal">נזק רגיל</option>
+            <option value="resisted">עמיד (חצי נזק)</option>
+            <option value="immune">חסין (בלי נזק)</option>
+            <option value="vulnerable">פגיע (נזק כפול)</option>
+          </select>
+        </div>
+        <div><button class="btn" data-clue-dt-add="${g.id}" style="width:100%;">הוסף רמז</button></div>
+      </div>
+      ${testsList}
+    `;
+  }
+
+  const damageLog = `
+    <div class="ency-section-title">נזק שהתקבל מהמפלצת (רמז לזיהוי בלבד)</div>
+    <div class="row">
+      <div><label class="field-label">למי</label>
+        <select data-dmglog-target="${g.id}"><option value="party">חבר קבוצה</option><option value="self">אני</option></select>
+      </div>
+      <div><label class="field-label">כמות נזק</label><input type="number" data-dmglog-amount="${g.id}" min="0" placeholder="0"></div>
+      <div style="flex:2;"><label class="field-label">הערה (לא חובה)</label><input type="text" data-dmglog-note="${g.id}" placeholder="למשל: התקפת חרטום"></div>
+      <div><button class="btn" data-dmglog-add="${g.id}" style="width:100%;">רשום</button></div>
+    </div>
+    ${g.damageLog.length ? g.damageLog.map(d=>`<div class="list-item"><span class="grow">${d.target==='party'?'לחבר קבוצה':'אליי'}: ${d.amount} נזק ${d.note?'— '+esc(d.note):''}</span></div>`).join('') : ''}
+  `;
+
+  return `<div class="card">${woundHeader}${body}${damageLog}</div>`;
+}
+
+function renderCombatTab(){
+  const pane = document.getElementById('pane-combat');
+  if(!pane) return;
+  const c = state.combat;
+
+  const actionCards = `
+    <div class="grid3">
+      <div class="card">
+        <h3>פעולה (Action)</h3>
+        <div class="ency-block"><strong>תקיפה.</strong> התקפה עם נשק או יצור מוכר.</div>
+        <div class="ency-block"><strong>הטלת לחש.</strong> רוב הלחשים דורשים Action.</div>
+        <div class="ency-block"><strong>הסתתרות (Hide).</strong> בדיקת חמקנות מול תפיסת האויב.</div>
+        <div class="ency-block"><strong>עזרה (Help).</strong> יתרון לחבר קבוצה בפעולה הבאה שלו.</div>
+        <div class="ency-block"><strong>ריצה (Dash).</strong> הכפלת מהירות התנועה בתור.</div>
+        <div class="ency-block"><strong>נסיגה (Disengage).</strong> תנועה בלי לעורר התקפת הזדמנות.</div>
+        <div class="ency-block"><strong>הכנה (Ready).</strong> הכנת פעולה שתופעל בתגובה לתנאי שתגדירו.</div>
+      </div>
+      <div class="card">
+        <h3>פעולת בונוס (Bonus Action)</h3>
+        <div class="ency-block">רק אם יש לכם משהו שמפעיל אותה במפורש.</div>
+        <div class="ency-block"><strong>לחש בונוס.</strong> לחשים שמוגדרים כפעולת בונוס בספר הלחשים שלכם.</div>
+        <div class="ency-block"><strong>התקפה בנשק שני.</strong> לחימה דו-נשקית, אחרי תקיפה בנשק קל.</div>
+        <div class="footnote">אפשר להטיל לחש אחד ב-Action ולחש בונוס אחד באותו תור — לא שני לחשי Action.</div>
+      </div>
+      <div class="card">
+        <h3>תגובה (Reaction)</h3>
+        <div class="ency-block"><strong>התקפת הזדמנות.</strong> כשאויב עוזב את הטווח שלכם בלי Disengage.</div>
+        <div class="ency-block"><strong>לחש תגובה (כמו Shield).</strong> לחשים שמוגדרים כתגובה.</div>
+        <div class="footnote">תגובה אחת בלבד לסבב — גם אם היא לא בתורכם.</div>
+      </div>
+    </div>`;
+
+  const woundsCard = canHeal() ? `
+    <div class="card">
+      <h3>מצב הקבוצה <small>לתעדוף מי לרפא קודם — בלי לספור חיים מדויקים, רק דרגת פציעה</small></h3>
+      ${state.party.map(m=>{
+        const current = c.wounds[m.id] || 'healthy';
+        return `
+        <div class="list-item" style="flex-wrap:wrap;">
+          <input type="text" class="spell-tags-input" style="flex:1; min-width:120px;" data-party-name="${m.id}" value="${esc(m.name)}">
+          <div class="chip-row" style="margin:0; flex:3;">
+            ${Object.entries(WOUND_STATUS_LABELS).map(([k,lbl])=>`
+              <div class="chip ${current===k?'active':''}" data-wound-set="${m.id}:${k}" style="${current===k?`color:${WOUND_STATUS_COLORS[k]};border-color:${WOUND_STATUS_COLORS[k]};`:''}">${lbl}</div>
+            `).join('')}
+          </div>
+          <button class="icon-btn" data-party-remove="${m.id}" title="הסר מהקבוצה">✕</button>
+        </div>`;
+      }).join('') || `<div class="empty-state">אין עדיין חברי קבוצה. הוסיפו למטה.</div>`}
+      <button class="btn gold" id="partyAdd" style="margin-top:10px;">＋ הוסף חבר קבוצה</button>
+    </div>` : '';
+
+  const monsterCards = c.monsters.map(g=>renderMonsterGroupCard(g)).join('');
+
+  pane.innerHTML = `
+    <h2 class="pane-title">עוזר קרב</h2>
+    <p class="pane-note">מה עושים בתור, מצב הקבוצה, וזיהוי מפלצות תוך כדי קרב לפי רמזים שנאספים.</p>
+
+    ${actionCards}
+    ${woundsCard}
+
+    <div style="margin:20px 0 10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+      <h3 style="font-family:var(--font-display); margin:0; color:var(--ink);">מפלצות בקרב</h3>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="combatNewFight">קרב חדש (איפוס)</button>
+        <button class="btn gold" id="combatAddUnknown">＋ הוסף מפלצת לא ידועה</button>
+      </div>
+    </div>
+    ${monsterCards || `<div class="empty-state">אין מפלצות בקרב עדיין. הוסיפו מפלצת מזוהה דרך כפתור ה"הוסף לעוזר הקרב" באנציקלופדיה, או "מפלצת לא ידועה" לזיהוי תוך כדי הקרב.</div>`}
+  `;
+
+  document.getElementById('combatNewFight').addEventListener('click', ()=>{
+    c.wounds = {};
+    c.monsters = [];
+    renderCombatTab();
+  });
+  document.getElementById('partyAdd')?.addEventListener('click', ()=>{
+    state.party.push({id: uid(), name:`חבר קבוצה ${state.party.length+1}`});
+    renderCombatTab();
+  });
+  pane.querySelectorAll('[data-party-name]').forEach(inp=>inp.addEventListener('input', ()=>{
+    const m = state.party.find(x=>x.id===inp.dataset.partyName); if(m) m.name = inp.value;
+  }));
+  pane.querySelectorAll('[data-party-remove]').forEach(b=>b.addEventListener('click', ()=>{
+    state.party = state.party.filter(x=>x.id!==b.dataset.partyRemove);
+    delete c.wounds[b.dataset.partyRemove];
+    renderCombatTab();
+  }));
+  pane.querySelectorAll('[data-wound-set]').forEach(chip=>chip.addEventListener('click', ()=>{
+    const [mid, status] = chip.dataset.woundSet.split(':');
+    c.wounds[mid] = status;
+    renderCombatTab();
+  }));
+  document.getElementById('combatAddUnknown').addEventListener('click', ()=>{
+    c.monsters.push(newMonsterGroup({label:`מפלצת ${c.monsters.length+1}`}));
+    renderCombatTab();
+  });
+
+  pane.querySelectorAll('[data-monster-label]').forEach(inp=>inp.addEventListener('input', ()=>{
+    const g = c.monsters.find(x=>x.id===inp.dataset.monsterLabel); if(g) g.label = inp.value;
+  }));
+  pane.querySelectorAll('[data-monster-count]').forEach(inp=>inp.addEventListener('change', ()=>{
+    const g = c.monsters.find(x=>x.id===inp.dataset.monsterCount); if(g){ setMonsterCount(g, inp.value); renderCombatTab(); }
+  }));
+  pane.querySelectorAll('[data-monster-remove]').forEach(b=>b.addEventListener('click', ()=>{
+    c.monsters = c.monsters.filter(x=>x.id!==b.dataset.monsterRemove); renderCombatTab();
+  }));
+  pane.querySelectorAll('[data-monster-hp]').forEach(inp=>inp.addEventListener('change', ()=>{
+    const [gid, i] = inp.dataset.monsterHp.split(':');
+    const g = c.monsters.find(x=>x.id===gid); if(!g) return;
+    g.hp[+i].cur = clamp(parseInt(inp.value,10)||0, 0, g.hp[+i].max);
+    saveState();
+  }));
+
+  pane.querySelectorAll('[data-clue-filter]').forEach(sel=>sel.addEventListener('change', ()=>{
+    const [gid, param] = sel.dataset.clueFilter.split(':');
+    const g = c.monsters.find(x=>x.id===gid); if(g) g.clues[param] = sel.value;
+  }));
+  pane.querySelectorAll('[data-clue-search]').forEach(b=>b.addEventListener('click', ()=>{
+    const g = c.monsters.find(x=>x.id===b.dataset.clueSearch); if(g) searchMonsterCandidates(g);
+  }));
+  pane.querySelectorAll('[data-clue-pick]').forEach(b=>b.addEventListener('click', ()=>{
+    const [gid, i] = b.dataset.cluePick.split(':');
+    const g = c.monsters.find(x=>x.id===gid); if(g) identifyMonster(g, g.candidates[+i]);
+    renderCombatTab();
+  }));
+  pane.querySelectorAll('[data-clue-hpapply]').forEach(b=>b.addEventListener('click', ()=>{
+    const g = c.monsters.find(x=>x.id===b.dataset.clueHpapply); if(!g) return;
+    const minInp = pane.querySelector(`[data-clue-hpmin="${g.id}"]`);
+    const maxInp = pane.querySelector(`[data-clue-hpmax="${g.id}"]`);
+    g.clues.hpMin = minInp.value!=='' ? parseInt(minInp.value,10) : null;
+    g.clues.hpMax = maxInp.value!=='' ? parseInt(maxInp.value,10) : null;
+    refilterCandidates(g);
+    renderCombatTab();
+  }));
+  pane.querySelectorAll('[data-clue-dt-add]').forEach(b=>b.addEventListener('click', ()=>{
+    const g = c.monsters.find(x=>x.id===b.dataset.clueDtAdd); if(!g) return;
+    const type = pane.querySelector(`[data-clue-dt-type="${g.id}"]`).value;
+    const result = pane.querySelector(`[data-clue-dt-result="${g.id}"]`).value;
+    g.clues.damageTests.push({type, result});
+    refilterCandidates(g);
+    renderCombatTab();
+  }));
+  pane.querySelectorAll('[data-clue-test-del]').forEach(b=>b.addEventListener('click', ()=>{
+    const [gid, i] = b.dataset.clueTestDel.split(':');
+    const g = c.monsters.find(x=>x.id===gid); if(!g) return;
+    g.clues.damageTests.splice(+i, 1);
+    refilterCandidates(g);
+    renderCombatTab();
+  }));
+
+  pane.querySelectorAll('[data-dmglog-add]').forEach(b=>b.addEventListener('click', ()=>{
+    const g = c.monsters.find(x=>x.id===b.dataset.dmglogAdd); if(!g) return;
+    const target = pane.querySelector(`[data-dmglog-target="${g.id}"]`).value;
+    const amount = parseInt(pane.querySelector(`[data-dmglog-amount="${g.id}"]`).value,10)||0;
+    const note = pane.querySelector(`[data-dmglog-note="${g.id}"]`).value.trim();
+    g.damageLog.unshift({target, amount, note, ts:Date.now()});
+    renderCombatTab();
+  }));
+
+  saveState();
+}
+
+/* =========================================================
    7. אנציקלופדיה — ENCYCLOPEDIA (Open5e API, כל המקורות)
    ========================================================= */
 const ENCY_CATEGORIES = [
@@ -1577,9 +1961,75 @@ const ENCY_CATEGORIES = [
   {key:'spelllist',   endpoint:'spelllist',   label:'רשימות לחשים'},
   {key:'documents',   endpoint:'documents',   label:'מקורות'},
 ];
-const ENCY_ADDABLE = {spells:true, weapons:true, magicitems:true};
+const ENCY_ADDABLE = {spells:true, weapons:true, magicitems:true, monsters:true};
 
-function encyName(item){ return item.name || item.title || item.slug || '—'; }
+// ספרי מקור זמינים ב-Open5e — משמשים כסינון "מקור" אחיד לכל הקטגוריות (חוץ מ'מקורות' עצמה),
+// וגם עוזרים להבחין בין כמה תוצאות באותו שם (למשל כמה גרסאות "יוניקורן" מספרים שונים).
+const ENCY_DOCUMENTS = [
+  {value:'wotc-srd', label:'5e Core Rules (WotC SRD)'},
+  {value:'o5e', label:'Open5e Original'},
+  {value:'tob', label:'Tome of Beasts'},
+  {value:'cc', label:'Creature Codex'},
+  {value:'tob2', label:'Tome of Beasts 2'},
+  {value:'tob3', label:'Tome of Beasts 3'},
+  {value:'tob-2023', label:'Tome of Beasts 2023'},
+  {value:'dmag', label:'Deep Magic 5e'},
+  {value:'dmag-e', label:'Deep Magic Extended'},
+  {value:'menagerie', label:'Level Up A5e — Monstrous Menagerie'},
+  {value:'a5e', label:'Level Up A5e'},
+  {value:'kp', label:'Kobold Press Compilation'},
+  {value:'warlock', label:'Warlock Archives'},
+  {value:'vom', label:'Vault of Magic'},
+  {value:'toh', label:'Tome of Heroes'},
+  {value:'taldorei', label:"Critical Role: Tal'Dorei"},
+  {value:'blackflag', label:'Black Flag SRD'},
+];
+
+// שדות סינון אמיתיים לכל קטגוריה (מעבר לחיפוש חופשי) — לפי פרמטרים שנתמכים ב-Open5e API
+const ENCY_FILTERS = {
+  monsters: [
+    {param:'type', label:'סוג', options:['Aberration','Beast','Celestial','Construct','Dragon','Elemental','Fey','Fiend','Giant','Humanoid','Monstrosity','Ooze','Plant','Undead']},
+    {param:'size', label:'גודל', options:['Tiny','Small','Medium','Large','Huge','Gargantuan']},
+    {param:'cr', label:'דרגת אתגר (CR)', options:['0','0.125','0.25','0.5','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','30']},
+  ],
+  spells: [
+    {param:'level_int', label:'רמה', options:['0','1','2','3','4','5','6','7','8','9']},
+    {param:'school', label:'בית ספר', options:['abjuration','conjuration','divination','enchantment','evocation','illusion','necromancy','transmutation']},
+    {param:'dnd_class', label:'מחלקה', options:['Wizard','Cleric','Druid','Bard','Sorcerer','Warlock','Paladin','Ranger','Artificer']},
+  ],
+  weapons: [
+    {param:'category', label:'קטגוריה', options:['Simple','Martial']},
+    {param:'damage_type', label:'סוג נזק', options:['bludgeoning','piercing','slashing']},
+  ],
+  armor: [
+    {param:'category', label:'קטגוריה', options:['Light','Medium','Heavy','Shield']},
+  ],
+  magicitems: [
+    {param:'rarity', label:'נדירות', options:['Common','Uncommon','Rare','Very Rare','Legendary','Artifact']},
+    {param:'type', label:'סוג', options:['Wondrous item','Weapon','Armor','Potion','Ring','Rod','Scroll','Staff','Wand']},
+  ],
+};
+function filtersForCategory(catKey){
+  const base = ENCY_FILTERS[catKey] || [];
+  if(catKey === 'documents') return base;
+  return [...base, {param:'document__slug', label:'מקור', options: ENCY_DOCUMENTS.map(d=>d.value), optionLabel: v=>(ENCY_DOCUMENTS.find(d=>d.value===v)||{}).label || v}];
+}
+
+function encyName(item){ return item._displayName || item.name || item.title || item.slug || '—'; }
+// כשכמה תוצאות חולקות אותו שם (למשל "יוניקורן" מ-3 ספרי מקור שונים עם סטטיסטיקות שונות),
+// לא נכון להסתיר/למזג ביניהן — הן מפלצות שונות בפועל — אלא לתייג כל אחת עם שם ספר המקור שלה.
+function applyDisplayNamesForResults(){
+  const counts = {};
+  state.ency.results.forEach(it=>{
+    const key = (it.name || it.title || it.slug || '').toLowerCase().trim();
+    counts[key] = (counts[key]||0) + 1;
+  });
+  state.ency.results.forEach(it=>{
+    const base = it.name || it.title || it.slug || '—';
+    const key = base.toLowerCase().trim();
+    it._displayName = (counts[key] > 1 && it.document__title) ? `${base} (${it.document__title})` : base;
+  });
+}
 
 function toast(msg){
   let el = document.getElementById('toast');
@@ -1721,6 +2171,17 @@ function addMagicItemFromApi(m){
   saveState();
   toast('✓ הפריט נוסף לתרמיל השלל');
 }
+function addMonsterToCombat(mon){
+  const existing = state.combat.monsters.find(g => g.known && g.known.slug === mon.slug);
+  if(existing){
+    existing.count += 1;
+    existing.hp.push({ cur: mon.hit_points, max: mon.hit_points });
+  }else{
+    state.combat.monsters.push(newMonsterGroup({ known: mon, label: mon.name, count:1, hp:[{cur:mon.hit_points, max:mon.hit_points}] }));
+  }
+  saveState();
+  toast(`✓ ${mon.name} נוסף לעוזר הקרב`);
+}
 
 /* ----- שליפה מ-Open5e ----- */
 async function encyFetch(reset){
@@ -1734,13 +2195,18 @@ async function encyFetch(reset){
     let url = (!reset && state.ency.next) ? state.ency.next : null;
     if(!url){
       const q = state.ency.query.trim();
-      url = `https://api.open5e.com/v1/${cat.endpoint}/?limit=30${q?`&search=${encodeURIComponent(q)}`:''}`;
+      const params = new URLSearchParams();
+      params.set('limit','30');
+      if(q) params.set('search', q);
+      Object.entries(state.ency.filters||{}).forEach(([k,v])=>{ if(v) params.set(k, v); });
+      url = `https://api.open5e.com/v1/${cat.endpoint}/?${params.toString()}`;
     }
     const res = await fetch(url);
     if(!res.ok) throw new Error('http '+res.status);
     const data = await res.json();
     state.ency.results = state.ency.results.concat(data.results || []);
     state.ency.next = data.next || null;
+    applyDisplayNamesForResults();
   }catch(err){
     console.warn('Open5e encyclopedia fetch failed:', err);
     state.ency.error = 'שגיאה בטעינה מ-Open5e. בדקו את החיבור לרשת ונסו שוב.';
@@ -1856,6 +2322,7 @@ function encyDetailModal(){
   if(cat==='spells')     addBtn = `<button class="btn gold" id="encyAdd" style="margin-top:16px;">＋ הוסף לספר הלחשים שלי</button>`;
   if(cat==='weapons')    addBtn = `<button class="btn gold" id="encyAdd" style="margin-top:16px;">＋ הוסף לתרמיל השלל</button>`;
   if(cat==='magicitems') addBtn = `<button class="btn gold" id="encyAdd" style="margin-top:16px;">＋ הוסף לתרמיל השלל</button>`;
+  if(cat==='monsters')   addBtn = `<button class="btn gold" id="encyAdd" style="margin-top:16px;">＋ הוסף לעוזר הקרב</button>`;
   return `
     <div class="ency-overlay" id="encyOverlay">
       <div class="ency-modal">
@@ -1897,7 +2364,7 @@ function renderEncyclopediaTab(){
 
   pane.innerHTML = `
     <h2 class="pane-title">אנציקלופדיה — D&amp;D 5E</h2>
-    <p class="pane-note">עיון חי בכל תוכן ה-SRD דרך <a href="https://open5e.com" target="_blank" rel="noopener" style="color:var(--gold-bright);">Open5e API</a>: מפלצות, לחשים, פריטים, גזעים, מקצועות ועוד. לחצו על פריט לפרטים מלאים. בלחשים, נשקים ופריטים קסומים יש כפתור הוספה ישירות לדמות שלכם.</p>
+    <p class="pane-note">עיון חי בכל תוכן ה-SRD דרך <a href="https://open5e.com" target="_blank" rel="noopener" style="color:var(--gold-bright);">Open5e API</a>: מפלצות, לחשים, פריטים, גזעים, מקצועות ועוד. לחצו על פריט לפרטים מלאים, וסננו לפי השדות הרלוונטיים לכל קטגוריה. בלחשים, נשקים ופריטים קסומים יש כפתור הוספה לדמות שלכם, ובמפלצות — כפתור הוספה ישירות לעוזר הקרב.</p>
 
     <div class="chip-row">
       ${ENCY_CATEGORIES.map(c=>`<div class="chip ${c.key===e.category?'active':''}" data-ency-cat="${c.key}" style="${c.key===e.category?'color:var(--gold-bright);border-color:var(--gold);':''}">${c.label}</div>`).join('')}
@@ -1907,8 +2374,18 @@ function renderEncyclopediaTab(){
       <div class="row">
         <div style="flex:3"><label class="field-label">חיפוש ב${esc(cat?cat.label:'')}</label><input type="text" id="encySearch" value="${esc(e.query)}" placeholder="הקלידו שם ולחצו חיפוש..."></div>
         <div><button class="btn gold" id="encySearchBtn" style="width:100%;">חיפוש</button></div>
-        ${e.query?`<div><button class="btn" id="encyClear" style="width:100%;">נקה</button></div>`:''}
+        ${(e.query || Object.values(e.filters||{}).some(Boolean))?`<div><button class="btn" id="encyClear" style="width:100%;">נקה</button></div>`:''}
       </div>
+
+      ${filtersForCategory(e.category).length ? `<div class="row" style="margin-top:10px;">
+        ${filtersForCategory(e.category).map(f=>`
+          <div><label class="field-label">${esc(f.label)}</label>
+            <select data-ency-filter="${f.param}">
+              <option value="">הכול</option>
+              ${f.options.map(o=>`<option value="${esc(o)}" ${e.filters[f.param]===o?'selected':''}>${esc(f.optionLabel?f.optionLabel(o):o)}</option>`).join('')}
+            </select>
+          </div>`).join('')}
+      </div>` : ''}
 
       <div id="encyList" style="margin-top:16px;">${listHtml}</div>
 
@@ -1926,7 +2403,7 @@ function renderEncyclopediaTab(){
     chip.addEventListener('click', ()=>{
       if(e.category === chip.dataset.encyCat) return;
       e.category = chip.dataset.encyCat;
-      e.query = ''; e.results = []; e.next = null; e.fetched = false; e.detail = null;
+      e.query = ''; e.filters = {}; e.results = []; e.next = null; e.fetched = false; e.detail = null;
       renderEncyclopediaTab();
     });
   });
@@ -1936,8 +2413,16 @@ function renderEncyclopediaTab(){
   searchInput.addEventListener('input', ev=>{ e.query = ev.target.value; });
   searchInput.addEventListener('keydown', ev=>{ if(ev.key==='Enter') encyFetch(true); });
   document.getElementById('encySearchBtn').addEventListener('click', ()=> encyFetch(true));
-  document.getElementById('encyClear')?.addEventListener('click', ()=>{ e.query=''; encyFetch(true); });
+  document.getElementById('encyClear')?.addEventListener('click', ()=>{ e.query=''; e.filters={}; encyFetch(true); });
   document.getElementById('encyMore')?.addEventListener('click', ()=> encyFetch(false));
+
+  // סינון לפי קטגוריה
+  pane.querySelectorAll('[data-ency-filter]').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      e.filters[sel.dataset.encyFilter] = sel.value;
+      encyFetch(true);
+    });
+  });
 
   // פתיחת פירוט
   pane.querySelectorAll('[data-ency-open]').forEach(row=>{
@@ -1956,6 +2441,7 @@ function renderEncyclopediaTab(){
       if(e.category==='spells') addSpellFromApi(it);
       else if(e.category==='weapons') addWeaponFromApi(it);
       else if(e.category==='magicitems') addMagicItemFromApi(it);
+      else if(e.category==='monsters') addMonsterToCombat(it);
     });
   });
 
@@ -1969,6 +2455,7 @@ function renderEncyclopediaTab(){
     if(e.category==='spells') addSpellFromApi(it);
     else if(e.category==='weapons') addWeaponFromApi(it);
     else if(e.category==='magicitems') addMagicItemFromApi(it);
+    else if(e.category==='monsters') addMonsterToCombat(it);
   });
 
   saveState();
