@@ -1003,6 +1003,7 @@ function renderSpellsTab(){
           </div>
           <p class="footnote">"הטלות ליום" הופך את הלחש למונה עצמאי (כמו יכולת מולדת) שלא צורך חריצי קסם, ומתאפס במנוחה ארוכה. השאירו ריק כדי שהלחש ימשיך להשתמש בחריצים הרגילים.</p>
           <p class="footnote">אפשר להוסיף או לערוך תגיות בכל שלב — גם ללחשים שנוספו מהאנציקלופדיה — בשדה התגיות שבכל שורה. מספר תגיות מופרדות בפסיק.</p>
+          <p class="footnote">תגיות "ריפוי", "נזק" ו"בונוס" מיוחדות: הן מזינות את "המלצת קסם לתור" בטאב "עוזר קרב" (המלצה לפעולה ולפעולת בונוס).</p>
         </div>
       </div>
 
@@ -1873,28 +1874,41 @@ function generateFinishingMove(type, targetName){
 }
 const WOUND_STATUS_LABELS = {healthy:'בריא', light:'פצוע קל', medium:'פצוע בינוני', heavy:'פצוע קשה', dying:'גוסס'};
 const WOUND_STATUS_COLORS = {healthy:'var(--nature)', light:'var(--gold)', medium:'var(--utility)', heavy:'var(--combat)', dying:'var(--combat)'};
+// בחירה משוערת של מצב פציעה למפלצת (בריא/קצת/עומד למות...) — חלופה מהירה יותר מהקלדת מספרי חיים מדויקים
+const WOUND_LEVEL_FRACTIONS = {healthy:1, light:0.75, medium:0.5, heavy:0.25, dying:0};
+function hpFractionToWoundLevel(cur, max){
+  if(!max) return 'healthy';
+  const frac = cur/max;
+  if(frac <= 0) return 'dying';
+  if(frac <= 0.25) return 'heavy';
+  if(frac <= 0.5) return 'medium';
+  if(frac < 1) return 'light';
+  return 'healthy';
+}
+// "יכולה לרפא" ו"יכולה להתקיף בקסם" נקבעים לפי תגיות מפורשות על הלחש ("ריפוי"/"נזק"), לא ניחוש מתוך הטקסט
 function canHeal(){
-  return state.spells.some(s => [s.name, s.note, ...(s.tags||[])].join(' ').includes('ריפוי'));
+  return state.spells.some(s => (s.tags||[]).includes('ריפוי'));
 }
 // יש/אין פצועים בקבוצה — נגזר מסטטוס הפציעה הקיים של כל חבר, בלי צורך במעקב נזק מדויק בנפרד
 function anyPartyInjured(){
   return state.party.some(m => (state.combat.wounds[m.id]||'healthy') !== 'healthy');
 }
-// מוצא את לחש הריפוי הזול/הזמין ביותר כרגע — אותה לוגיקת "הכי חסכוני" כמו בטאב הלחשים, ממוקדת בריפוי
-function findHealingSpell(){
-  const candidates = state.spells
-    .filter(s => [s.name, s.note, ...(s.tags||[])].join(' ').includes('ריפוי'))
-    .sort((a,b)=>a.level-b.level);
-  for(const sp of candidates){
-    if(sp.usesPerDay){
-      if((sp.usesUsed||0) < sp.usesPerDay) return {spell: sp, reason:`הטלות ליום (נותרו ${sp.usesPerDay-(sp.usesUsed||0)}/${sp.usesPerDay})`};
-      continue;
-    }
-    if(sp.level === 0) return {spell: sp, reason:'קסם פשוט — ללא עלות בחריצים'};
-    const slot = state.slots[sp.level];
-    if(slot && slot.used < slot.max) return {spell: sp, reason:`דורש חריץ רמה ${sp.level} (נותרו ${slot.max - slot.used})`};
+// המלצת קסם לפעולה (Action) של התור: ריפוי אם יש פצועים בקבוצה, אחרת התקפה אם יש מפלצת בקרב —
+// משתמש באותה לוגיקת "הכי חסכוני" כמו בטאב הלחשים (recommendCheapest), רק עם תגית ריפוי/נזק
+function recommendActionSpell(){
+  if(anyPartyInjured()){
+    const heal = recommendCheapest('ריפוי');
+    if(heal) return {...heal, why:'יש פצועים בקבוצה'};
+  }
+  if(state.combat.monsters.length){
+    const atk = recommendCheapest('נזק');
+    if(atk) return {...atk, why:'יש מפלצת בקרב — אולי כדאי להתקיף'};
   }
   return null;
+}
+// המלצת קסם לפעולת בונוס (Bonus Action) — עצמאית מהמלצת הפעולה, כי אפשר לשלב את שתיהן באותו תור; לפי תגית "בונוס"
+function recommendBonusSpell(){
+  return recommendCheapest('בונוס');
 }
 function splitDamageTypeList(str){
   return String(str||'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
@@ -1983,12 +1997,19 @@ function renderMonsterGroupCard(g){
     const imm = splitDamageTypeList(mon.damage_immunities);
     const vul = splitDamageTypeList(mon.damage_vulnerabilities);
     const badges = (arr,label) => arr.length ? `<div class="footnote"><strong>${label}:</strong> ${arr.map(esc).join(', ')}</div>` : '';
-    const hpRows = g.hp.map((h,i)=>`
-      <div class="row tight" style="align-items:center; margin-bottom:6px;">
+    const hpRows = g.hp.map((h,i)=>{
+      const currentLevel = hpFractionToWoundLevel(h.cur, h.max);
+      const chips = Object.entries(WOUND_STATUS_LABELS).map(([k,lbl])=>`
+        <div class="chip ${currentLevel===k?'active':''}" data-monster-woundlevel="${g.id}:${i}:${k}" style="${currentLevel===k?`color:${WOUND_STATUS_COLORS[k]};border-color:${WOUND_STATUS_COLORS[k]};`:''}">${lbl}</div>
+      `).join('');
+      return `
+      <div class="row tight" style="align-items:center; margin-bottom:4px; flex-wrap:wrap;">
         <span style="min-width:70px;">מופע ${i+1}</span>
         <div><input type="number" data-monster-hp="${g.id}:${i}" value="${h.cur}" min="0" max="${h.max}"></div>
         <span style="color:var(--ink-faint);">/ ${h.max}</span>
-      </div>`).join('');
+        <div class="chip-row" style="margin:0; flex:1;">${chips}</div>
+      </div>`;
+    }).join('');
     const suggestions = state.spells.map(s=>({s, types:guessSpellDamageTypes(s)})).filter(x=>x.types.length).map(({s,types})=>{
       const good = types.some(t=>vul.includes(t));
       const bad = types.some(t=>res.includes(t)||imm.includes(t));
@@ -2113,15 +2134,36 @@ function renderCombatTab(){
         </div>`;
       }).join('') || `<div class="empty-state">אין עדיין חברי קבוצה. הוסיפו למטה.</div>`}
       <button class="btn gold" id="partyAdd" style="margin-top:10px;">＋ הוסף חבר קבוצה</button>
-      ${anyPartyInjured() ? (()=>{
-        const rec = findHealingSpell();
-        return rec
-          ? `<div class="recommend-box" style="margin-top:14px;"><div class="title">⚕️ יש פצועים בקבוצה — מומלץ להטיל:</div><div class="spell-name">${esc(rec.spell.name)}</div><div class="spell-meta">${rec.reason}</div></div>`
-          : `<div class="empty-state" style="margin-top:14px;">יש פצועים בקבוצה, אך אין לחש ריפוי זמין כרגע — שקלו מנוחה קצרה.</div>`;
-      })() : ''}
     </div>` : '';
 
   const monsterCards = c.monsters.map(g=>renderMonsterGroupCard(g)).join('');
+
+  const actionRec = state.spells.length ? recommendActionSpell() : null;
+  const bonusRec = state.spells.length ? recommendBonusSpell() : null;
+  const spellRecCard = state.spells.length ? `
+    <div class="card">
+      <h3>המלצת קסם לתור <small>ריפוי כשיש פצועים, התקפה כשיש מפלצת בקרב — ופעולת בונוס בנפרד, לפי תגיות "ריפוי"/"נזק"/"בונוס"</small></h3>
+      <div class="grid2">
+        <div>
+          <div class="footnote" style="margin-top:0;">פעולה (Action)</div>
+          ${actionRec ? `
+            <div class="recommend-box">
+              <div class="title">${esc(actionRec.why)}</div>
+              <div class="spell-name">${esc(actionRec.spell.name)}</div>
+              <div class="spell-meta">${actionRec.reason}</div>
+            </div>` : `<div class="empty-state">אין כרגע המלצה לפעולה (אין פצועים/מפלצת בקרב, או שאין לחש מתויג בהתאם).</div>`}
+        </div>
+        <div>
+          <div class="footnote" style="margin-top:0;">פעולת בונוס (Bonus Action)</div>
+          ${bonusRec ? `
+            <div class="recommend-box">
+              <div class="title">אפשר גם להטיל כפעולת בונוס:</div>
+              <div class="spell-name">${esc(bonusRec.spell.name)}</div>
+              <div class="spell-meta">${bonusRec.reason}</div>
+            </div>` : `<div class="empty-state">אין לחש מתויג "בונוס" זמין כרגע.</div>`}
+        </div>
+      </div>
+    </div>` : '';
 
   const finishCard = `
     <div class="card">
@@ -2141,6 +2183,7 @@ function renderCombatTab(){
     <p class="pane-note">מה עושים בתור, מצב הקבוצה, וזיהוי מפלצות תוך כדי קרב לפי רמזים שנאספים.</p>
 
     ${actionCards}
+    ${spellRecCard}
     ${finishCard}
     ${woundsCard}
 
@@ -2202,6 +2245,13 @@ function renderCombatTab(){
     const g = c.monsters.find(x=>x.id===gid); if(!g) return;
     g.hp[+i].cur = clamp(parseInt(inp.value,10)||0, 0, g.hp[+i].max);
     saveState();
+  }));
+  pane.querySelectorAll('[data-monster-woundlevel]').forEach(chip=>chip.addEventListener('click', ()=>{
+    const [gid, i, level] = chip.dataset.monsterWoundlevel.split(':');
+    const g = c.monsters.find(x=>x.id===gid); if(!g) return;
+    const inst = g.hp[+i]; if(!inst) return;
+    inst.cur = Math.round(inst.max * WOUND_LEVEL_FRACTIONS[level]);
+    renderCombatTab();
   }));
 
   pane.querySelectorAll('[data-clue-filter]').forEach(sel=>sel.addEventListener('change', ()=>{
