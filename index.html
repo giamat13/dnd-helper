@@ -913,24 +913,27 @@ function parseTagsInput(raw){
 function allSpellTags(){
   return [...new Set(state.spells.flatMap(s=>s.tags||[]))].sort((a,b)=>a.localeCompare(b,'he'));
 }
-// לוגיקת "הכי חסכוני" משותפת: מקבלת רשימת מועמדים ממוינת לפי רמה, ומחזירה את הראשון שבאמת זמין כרגע
-function pickCheapestAvailable(candidates){
+// לוגיקת "הכי חסכוני" משותפת: מקבלת רשימת מועמדים ממוינת לפי רמה, ומחזירה את מי שזמין באמת כרגע.
+// skip מאפשר לדלג קדימה בין כל הזמינים בפועל (לכפתור "הצע אחר"), בסבב חוזר (modulo) כדי שאפשר לעבור על כולם
+function pickCheapestAvailable(candidates, skip=0){
+  const available = [];
   for(const sp of candidates){
     if(sp.usesPerDay){
-      if((sp.usesUsed||0) < sp.usesPerDay) return {spell: sp, reason:`הטלות ליום (נותרו ${sp.usesPerDay-(sp.usesUsed||0)}/${sp.usesPerDay})`};
-      continue;
+      if((sp.usesUsed||0) < sp.usesPerDay) available.push({spell: sp, reason:`הטלות ליום (נותרו ${sp.usesPerDay-(sp.usesUsed||0)}/${sp.usesPerDay})`});
+    }else if(sp.level === 0){
+      available.push({spell: sp, reason:'קסם פשוט — ללא עלות בחריצים'});
+    }else{
+      const slot = state.slots[sp.level];
+      if(slot && slot.used < slot.max) available.push({spell: sp, reason:`דורש חריץ רמה ${sp.level} (נותרו ${slot.max - slot.used})`});
     }
-    if(sp.level === 0) return {spell: sp, reason:'קסם פשוט — ללא עלות בחריצים'};
-    const slot = state.slots[sp.level];
-    if(slot && slot.used < slot.max) return {spell: sp, reason:`דורש חריץ רמה ${sp.level} (נותרו ${slot.max - slot.used})`};
   }
-  const cantrip = candidates.find(s=>s.level===0 && !s.usesPerDay);
-  if(cantrip) return {spell: cantrip, reason:'קסם פשוט — ללא עלות בחריצים'};
-  return null;
+  if(!available.length) return null;
+  const idx = ((skip % available.length) + available.length) % available.length;
+  return {...available[idx], hasMore: available.length > 1};
 }
-function recommendCheapest(tag){
+function recommendCheapest(tag, skip=0){
   const candidates = state.spells.filter(s => (s.tags||[]).includes(tag)).sort((a,b)=>a.level-b.level);
-  return pickCheapestAvailable(candidates);
+  return pickCheapestAvailable(candidates, skip);
 }
 
 function renderSpellsTab(){
@@ -965,11 +968,7 @@ function renderSpellsTab(){
           </div>
           <div class="row" style="margin-top:8px;">
             <div style="flex:2"><label class="field-label">תגיות (אופציונלי, מופרדות בפסיק)</label><input type="text" id="spNewTag" placeholder="למשל: ריפוי, קרבי"></div>
-            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:130px; padding-bottom:8px;">
-              <input type="checkbox" id="spNewBonus" style="width:auto;">
-              <label for="spNewBonus" style="font-size:13px; color:var(--ink-dim); cursor:pointer;">קובית נזק בונוס</label>
-            </div>
-            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:150px; padding-bottom:8px;">
+            <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:180px; padding-bottom:8px;">
               <input type="checkbox" id="spNewIsBonusAction" style="width:auto;">
               <label for="spNewIsBonusAction" style="font-size:13px; color:var(--ink-dim); cursor:pointer;">נטען כפעולת בונוס (Bonus Action)</label>
             </div>
@@ -1000,7 +999,6 @@ function renderSpellsTab(){
                 <span class="lvl">${s.level===0?'פשוט':'רמה '+s.level}</span>
                 <span class="name">${esc(s.name)}</span>
                 <span class="note">${esc(s.note||'')}</span>
-                ${s.bonusDie ? `<span class="badge day">קובית נזק בונוס</span>` : ''}
                 ${s.isBonusAction ? `<span class="badge long">פעולת בונוס</span>` : ''}
                 ${tagsHtml}
                 ${usesHtml}
@@ -1071,7 +1069,6 @@ function renderSpellsTab(){
       note: document.getElementById('spNewNote').value.trim(),
       usesPerDay: usesPerDay && usesPerDay > 0 ? usesPerDay : null,
       usesUsed: 0,
-      bonusDie: document.getElementById('spNewBonus').checked,
       isBonusAction: document.getElementById('spNewIsBonusAction').checked,
       tags: parseTagsInput(document.getElementById('spNewTag').value),
     });
@@ -1908,11 +1905,33 @@ const WOUND_SEVERITY = {healthy:0, light:1, medium:2, heavy:3, dying:4};
 function partyMaxWoundSeverity(){
   return state.party.reduce((max,m)=> Math.max(max, WOUND_SEVERITY[state.combat.wounds[m.id]||'healthy']), 0);
 }
+// מדלגים על לחש התקפה שכל המפלצות "הידועות" בקרב עמידות/חסינות לסוג הנזק שלו (מנוחש מהשם/הערה/תגיות, כמו בכרטיס המפלצת)
+function spellIneffectiveAgainstKnownMonsters(spell){
+  const types = guessSpellDamageTypes(spell);
+  if(!types.length) return false;
+  const knownMonsters = state.combat.monsters.filter(g=>g.known).map(g=>g.known);
+  if(!knownMonsters.length) return false;
+  return knownMonsters.some(mon=>{
+    const res = splitDamageTypeList(mon.damage_resistances);
+    const imm = splitDamageTypeList(mon.damage_immunities);
+    return types.some(t=> res.includes(t) || imm.includes(t));
+  });
+}
+// מזהה המלצת "אחר" בכל תיבת המלצה — אינדקס דילוג זמני, לא נשמר בין רענוני דף (כמו spellTagsEditingId)
+let spellRecSkip = {heal:0, atk:0, bonus:0};
 // המלצת קסם לפעולה (Action) של התור: מציגה גם ריפוי (אם יש פצועים) וגם התקפה (אם יש מפלצת בקרב) יחד,
-// לפי תגיות מפורשות "ריפוי"/"נזק" — ומסמנת רק איזו מהן "מומלצת עכשיו" (פציעה קשה/גוססת גוברת על התקפה)
+// לפי תגיות מפורשות "ריפוי"/"נזק" — ומסמנת רק איזו מהן "מומלצת עכשיו" (פציעה קשה/גוססת גוברת על התקפה).
+// לחשי התקפה שכל המפלצות הידועות עמידות/חסינות אליהם לא מוצעים כלל.
 function recommendActionOptions(){
-  const heal = anyPartyInjured() ? recommendCheapest('ריפוי') : null;
-  const atk = state.combat.monsters.length ? recommendCheapest('נזק') : null;
+  const heal = anyPartyInjured() ? recommendCheapest('ריפוי', spellRecSkip.heal) : null;
+  let atk = null;
+  if(state.combat.monsters.length){
+    const candidates = state.spells
+      .filter(s => (s.tags||[]).includes('נזק'))
+      .filter(s => !spellIneffectiveAgainstKnownMonsters(s))
+      .sort((a,b)=>a.level-b.level);
+    atk = pickCheapestAvailable(candidates, spellRecSkip.atk);
+  }
   let primary = null;
   if(heal && partyMaxWoundSeverity() >= WOUND_SEVERITY.heavy) primary = 'heal';
   else if(atk) primary = 'attack';
@@ -1923,7 +1942,7 @@ function recommendActionOptions(){
 // לפי צ'קבוקס "נטען כפעולת בונוס" על הלחש (לא תגית — כדי לא להתבלבל עם תגיות חופשיות)
 function recommendBonusSpell(){
   const candidates = state.spells.filter(s => s.isBonusAction).sort((a,b)=>a.level-b.level);
-  return pickCheapestAvailable(candidates);
+  return pickCheapestAvailable(candidates, spellRecSkip.bonus);
 }
 function splitDamageTypeList(str){
   return String(str||'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
@@ -2155,19 +2174,20 @@ function renderCombatTab(){
 
   const actionOpts = state.spells.length ? recommendActionOptions() : {heal:null, atk:null, primary:null};
   const bonusRec = state.spells.length ? recommendBonusSpell() : null;
-  const actionBox = (rec, label, isPrimary) => rec ? `
+  const actionBox = (rec, label, isPrimary, skipKey) => rec ? `
     <div class="recommend-box" style="${isPrimary ? 'border-color:var(--gold);' : ''} margin-bottom:8px;">
       <div class="title">${isPrimary ? '⭐ מומלץ עכשיו — ' : ''}${label}</div>
       <div class="spell-name">${esc(rec.spell.name)}</div>
       <div class="spell-meta">${rec.reason}</div>
+      ${rec.hasMore ? `<button class="btn small" data-rec-other="${skipKey}" style="margin-top:8px;">🔄 הצע אחר</button>` : ''}
     </div>` : '';
   const actionHtml = (actionOpts.heal || actionOpts.atk)
-    ? actionBox(actionOpts.heal, 'ריפוי (יש פצועים)', actionOpts.primary==='heal')
-      + actionBox(actionOpts.atk, 'התקפה (יש מפלצת בקרב)', actionOpts.primary==='attack')
-    : `<div class="empty-state">אין כרגע המלצה לפעולה (אין פצועים/מפלצת בקרב, או שאין לחש מתויג בהתאם).</div>`;
+    ? actionBox(actionOpts.heal, 'ריפוי (יש פצועים)', actionOpts.primary==='heal', 'heal')
+      + actionBox(actionOpts.atk, 'התקפה (יש מפלצת בקרב)', actionOpts.primary==='attack', 'atk')
+    : `<div class="empty-state">אין כרגע המלצה לפעולה (אין פצועים/מפלצת בקרב, אין לחש מתויג בהתאם, או שהמפלצות הידועות עמידות/חסינות לכל לחשי ההתקפה הזמינים).</div>`;
   const spellRecCard = state.spells.length ? `
     <div class="card">
-      <h3>המלצת קסם לתור <small>ריפוי ו/או התקפה לפעולה (מסומן מי מומלץ יותר), ופעולת בונוס בנפרד</small></h3>
+      <h3>המלצת קסם לתור <small>ריפוי ו/או התקפה לפעולה (מסומן מי מומלץ יותר), ופעולת בונוס בנפרד — "הצע אחר" עובר לחלופה הבאה</small></h3>
       <div class="grid2">
         <div>
           <div class="footnote" style="margin-top:0;">פעולה (Action) <small>לפי תגיות "ריפוי"/"נזק"</small></div>
@@ -2175,12 +2195,7 @@ function renderCombatTab(){
         </div>
         <div>
           <div class="footnote" style="margin-top:0;">פעולת בונוס (Bonus Action) <small>לפי צ'קבוקס "נטען כפעולת בונוס"</small></div>
-          ${bonusRec ? `
-            <div class="recommend-box">
-              <div class="title">אפשר גם להטיל כפעולת בונוס:</div>
-              <div class="spell-name">${esc(bonusRec.spell.name)}</div>
-              <div class="spell-meta">${bonusRec.reason}</div>
-            </div>` : `<div class="empty-state">אין לחש שמסומן "נטען כפעולת בונוס" זמין כרגע.</div>`}
+          ${actionBox(bonusRec, 'אפשר גם להטיל כפעולת בונוס:', false, 'bonus') || `<div class="empty-state">אין לחש שמסומן "נטען כפעולת בונוס" זמין כרגע.</div>`}
         </div>
       </div>
     </div>` : '';
@@ -2216,6 +2231,12 @@ function renderCombatTab(){
     </div>
     ${monsterCards || `<div class="empty-state">אין מפלצות בקרב עדיין. הוסיפו מפלצת מזוהה דרך כפתור ה"הוסף לעוזר הקרב" באנציקלופדיה, או "מפלצת לא ידועה" לזיהוי תוך כדי הקרב.</div>`}
   `;
+
+  pane.querySelectorAll('[data-rec-other]').forEach(b=>b.addEventListener('click', ()=>{
+    const key = b.dataset.recOther;
+    spellRecSkip[key] = (spellRecSkip[key]||0) + 1;
+    renderCombatTab();
+  }));
 
   document.getElementById('finGenerate').addEventListener('click', ()=>{
     const type = document.getElementById('finTypeSelect').value;
@@ -2533,7 +2554,7 @@ function addSpellFromApi(sp){
   const note = [sp.school, sp.range, sp.duration].filter(Boolean).join(' · ');
   state.spells.push({
     id: uid(), name: sp.name,
-    level, note, usesPerDay:null, usesUsed:0, bonusDie:false, isBonusAction:false, tags: sp.school ? [sp.school] : [],
+    level, note, usesPerDay:null, usesUsed:0, isBonusAction:false, tags: sp.school ? [sp.school] : [],
   });
   saveState();
   toast('✓ הלחש נוסף לספר הלחשים שלך');
