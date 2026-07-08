@@ -395,6 +395,27 @@
   }
   .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
 
+  /* ---------- death saves ---------- */
+  .ds-track{ display:flex; gap:16px; justify-content:center; margin: 22px 0; flex-wrap:wrap; }
+  .ds-group{ text-align:center; }
+  .ds-group .ds-lbl{ font-size:13px; color: var(--ink-dim); margin-bottom:10px; letter-spacing:.5px; }
+  .ds-icons{ display:flex; gap:10px; }
+  .ds-icon{
+    width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:24px; cursor:pointer; border:2px solid var(--line); background: var(--panel-3);
+    transition: transform .1s, background .15s, border-color .15s;
+  }
+  .ds-icon:hover{ transform: scale(1.08); }
+  .ds-icon.success.on{ background: var(--nature-bg); border-color: var(--nature); }
+  .ds-icon.failure.on{ background: var(--combat-bg); border-color: var(--combat); }
+  .ds-status{
+    text-align:center; padding: 22px 16px; border-radius: 12px; margin-bottom: 18px;
+    font-family: var(--font-display); font-weight:900; font-size: 30px; letter-spacing:1px;
+  }
+  .ds-status.dying{ background: var(--panel-3); color: var(--ink); border:1px solid var(--line); }
+  .ds-status.stable{ background: var(--nature-bg); color:#bfe6c9; border:1px solid var(--nature-line); }
+  .ds-status.dead{ background: var(--combat-bg); color:#f0a29c; border:1px solid var(--combat-line); }
+
   @media(max-width: 640px){
     .row{ flex-direction: column; }
     .row > div{ width:100%; }
@@ -485,6 +506,9 @@ const state = {
     wounds: {},
     monsters: [],
   },
+
+  // הצלות ממוות — מתאפס ב"התייצבות" (ידני), בהחלמה מעל 0 חיים, או בהחייאה עם קריטי בהטלה
+  deathSaves: { successes: 0, failures: 0 },
 };
 
 function uid(){ return Math.random().toString(36).slice(2,10); }
@@ -504,6 +528,7 @@ function doLongRest(){
   state.specials.forEach(s=> s.used=0);
   state.spells.forEach(s=>{ if(s.usesPerDay) s.usesUsed = 0; });
   r.hpCur = r.hpMax; r.hpTemp = 0;
+  state.deathSaves = {successes:0, failures:0};
   renderMain();
 }
 
@@ -645,6 +670,7 @@ function currentClassIsCaster(){
    ========================================================= */
 const TABS = [
   {id:'setup', label:'הגדרת דמות', dotColor:'var(--gold)'},
+  {id:'hub', label:'פאנל מצב', dotColor:'var(--gold)'},
   {id:'combat', label:'עוזר קרב', dotColor:'var(--combat)'},
   {id:'spells', label:'לוחשות', dotColor:'var(--utility)', visible:()=>currentClassIsCaster()},
   {id:'fighter', label:'לוחם', dotColor:'var(--combat)', visible:()=>!currentClassIsCaster()},
@@ -674,6 +700,7 @@ function renderMain(){
   const main = document.getElementById('mainPane');
   const renderers = {
     setup: renderSetupTab,
+    hub: renderHubTab,
     combat: renderCombatTab,
     spells: renderSpellsTab,
     fighter: renderFighterTab,
@@ -717,6 +744,33 @@ function loadState(){
     }
     if(!Array.isArray(state.party)) state.party = [];
   }catch(e){}
+}
+
+/* =========================================================
+   0.5 פאנל מצב — HUB (מנוחות מרוכזות במקום אחד, בנוסף לטאבים האחרים)
+   ========================================================= */
+function renderHubTab(){
+  const pane = document.getElementById('pane-hub');
+  if(!pane) return;
+
+  pane.innerHTML = `
+    <h2 class="pane-title">פאנל מצב</h2>
+    <p class="pane-note">ריכוז מנוחות במקום אחד, בנוסף לכפתורים הקיימים בטאבים האחרים.</p>
+
+    <div class="card">
+      <h3>מנוחות</h3>
+      <p class="footnote" style="margin-top:0;">מנוחה משפיעה על כל הדמות בבת אחת — חיים, חריצי קסם, יכולות מיוחדות והצלות ממוות.</p>
+      <div class="row">
+        <button class="btn" id="hubShortRest" style="flex:1;">מנוחה קצרה</button>
+        <button class="btn success" id="hubLongRest" style="flex:1;">מנוחה ארוכה</button>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('hubShortRest').addEventListener('click', doShortRest);
+  document.getElementById('hubLongRest').addEventListener('click', doLongRest);
+
+  saveState();
 }
 
 /* =========================================================
@@ -969,7 +1023,7 @@ function renderSpellsTab(){
             <button class="btn" id="shortRestSlots" style="flex:1;">מנוחה קצרה</button>
             <button class="btn success" id="longRestSlots" style="flex:1;">מנוחה ארוכה</button>
           </div>
-          <p class="footnote">מנוחה כאן משפיעה על כל הדמות — חריצי קסם, יכולות מיוחדות וחיים כאחד.</p>
+          <p class="footnote">מנוחה כאן משפיעה על כל הדמות — חריצי קסם, יכולות מיוחדות וחיים כאחד. מנוחות זמינות גם בריכוז אחד בלשונית <a href="#" id="goHubSlots" style="color:var(--gold-bright);">פאנל מצב</a>.</p>
           <p class="footnote">כדי לשנות את הכמות המקסימלית של החריצים (למשל אחרי עליית רמה), עברו ל<a href="#" id="goSetupSlots" style="color:var(--gold-bright);">הגדרת דמות</a>.</p>
         </div>
 
@@ -1066,6 +1120,7 @@ function renderSpellsTab(){
 
   document.getElementById('shortRestSlots').addEventListener('click', doShortRest);
   document.getElementById('longRestSlots').addEventListener('click', doLongRest);
+  document.getElementById('goHubSlots').addEventListener('click', (e)=>{ e.preventDefault(); goToTab('hub'); });
 
   saveState();
 }
@@ -1073,24 +1128,27 @@ function renderSpellsTab(){
 /* =========================================================
    2. לוחם — FIGHTER
    ========================================================= */
-function attackAverage(a){
+// forceCrit מאפשר לעקוף את הצ'קבוקס "קריטי" של השורה — משמש בכפתורי "פגעתי!"/"קריטיקאל!" הגלובליים
+function attackAverage(a, forceCrit){
+  const crit = forceCrit!=null ? forceCrit : a.crit;
   const dieAvg = (a.die+1)/2;
   let base = a.dice*dieAvg + Number(a.mod||0);
-  if(a.crit) base = a.dice*2*dieAvg + Number(a.mod||0);
+  if(crit) base = a.dice*2*dieAvg + Number(a.mod||0);
   let bonus = 0;
   if(a.bonusOn && a.bonusDice>0){
     const bDieAvg = (a.bonusDie+1)/2;
-    bonus = a.crit ? a.bonusDice*2*bDieAvg : a.bonusDice*bDieAvg;
+    bonus = crit ? a.bonusDice*2*bDieAvg : a.bonusDice*bDieAvg;
   }
   return base + bonus;
 }
-function attackRoll(a){
+function attackRoll(a, forceCrit){
+  const crit = forceCrit!=null ? forceCrit : a.crit;
   let total = 0;
-  const rounds = a.crit ? 2 : 1;
+  const rounds = crit ? 2 : 1;
   for(let r=0;r<rounds;r++) for(let i=0;i<a.dice;i++) total += rollDie(a.die);
   total += Number(a.mod||0);
   if(a.bonusOn && a.bonusDice>0){
-    const brounds = a.crit ? 2 : 1;
+    const brounds = crit ? 2 : 1;
     for(let r=0;r<brounds;r++) for(let i=0;i<a.bonusDice;i++) total += rollDie(a.bonusDie);
   }
   return total;
@@ -1131,7 +1189,7 @@ function renderFighterTab(){
             <button class="btn" id="shortRestSpecials" style="flex:1;">מנוחה קצרה</button>
             <button class="btn success" id="longRestSpecials" style="flex:1;">מנוחה ארוכה</button>
           </div>
-          <p class="footnote">מנוחה כאן משפיעה על כל הדמות — יכולות מיוחדות, חריצי קסם וחיים כאחד. יכולות "פעמיים ביום" וכדומה מוגדרות כ"מנוחה ארוכה / יומי" ומתאפסות במנוחה ארוכה.</p>
+          <p class="footnote">מנוחה כאן משפיעה על כל הדמות — יכולות מיוחדות, חריצי קסם וחיים כאחד. יכולות "פעמיים ביום" וכדומה מוגדרות כ"מנוחה ארוכה / יומי" ומתאפסות במנוחה ארוכה. מנוחות זמינות גם בריכוז אחד בלשונית <a href="#" id="goHubSpecials" style="color:var(--gold-bright);">פאנל מצב</a>.</p>
         </div>
       </div>
 
@@ -1155,11 +1213,12 @@ function renderFighterTab(){
         </div>
 
         <div class="card">
-          <h3>בונוסים מהתקפות משולבות</h3>
+          <h3>מחשבון נזק משולב <small>הגדירו מראש כל רכיב נזק (נשק + סניק אטאק + נזק יסוד וכו'), ואז גלגלו הכול בלחיצה אחת</small></h3>
           <div id="comboList"></div>
-          <button class="btn" id="comboAdd" style="margin-top:4px;">+ הוסף התקפה</button>
+          <button class="btn" id="comboAdd" style="margin-top:4px;">+ הוסף רכיב נזק</button>
           <div class="row" style="margin-top:10px;">
-            <button class="btn gold" id="comboCalc" style="flex:1;">חשב סיבוב שלם</button>
+            <button class="btn gold" id="comboHit" style="flex:1;">🗡️ פגעתי!</button>
+            <button class="btn danger" id="comboCrit" style="flex:1;">💥 קריטיקאל!</button>
           </div>
           <div id="comboResult"></div>
         </div>
@@ -1185,6 +1244,7 @@ function renderFighterTab(){
   });
   document.getElementById('shortRestSpecials').addEventListener('click', doShortRest);
   document.getElementById('longRestSpecials').addEventListener('click', doLongRest);
+  document.getElementById('goHubSpecials').addEventListener('click', (e)=>{ e.preventDefault(); goToTab('hub'); });
 
   document.getElementById('critCalc').addEventListener('click', ()=>{
     const dice = parseInt(document.getElementById('critDice').value,10)||1;
@@ -1209,24 +1269,26 @@ function renderFighterTab(){
     state.combo.push({id:uid(), name:`התקפה ${state.combo.length+1}`, dice:1, die:8, mod:3, bonusDice:0, bonusDie:6, bonusOn:false, crit:false});
     renderComboList();
   });
-  document.getElementById('comboCalc').addEventListener('click', ()=>{
+  const rollCombo = (forceCrit)=>{
     let totalAvg = 0, totalRoll = 0;
     const rows = state.combo.map(a=>{
-      const avg = attackAverage(a);
-      const roll = attackRoll(a);
+      const avg = attackAverage(a, forceCrit);
+      const roll = attackRoll(a, forceCrit);
       totalAvg += avg; totalRoll += roll;
       return `<tr><td>${esc(a.name)}</td><td>${avg.toFixed(1)}</td><td>${roll}</td></tr>`;
     }).join('');
     document.getElementById('comboResult').innerHTML = `
       <table class="simple" style="margin-top:10px;">
-        <tr><th>התקפה</th><th>ממוצע</th><th>הטלה</th></tr>
+        <tr><th>רכיב נזק</th><th>ממוצע</th><th>הטלה</th></tr>
         ${rows}
       </table>
       <div class="result-box">
-        <div class="stat"><div class="num">${totalAvg.toFixed(1)}</div><div class="lbl">סה"כ ממוצע לסיבוב</div></div>
-        <div class="stat"><div class="num">${totalRoll}</div><div class="lbl">סה"כ בפועל</div></div>
+        <div class="stat"><div class="num">${totalAvg.toFixed(1)}</div><div class="lbl">${forceCrit?'ממוצע קריטי':'סה"כ ממוצע'}</div></div>
+        <div class="stat"><div class="num" style="color:${forceCrit?'var(--combat)':'var(--gold-bright)'};">${totalRoll}</div><div class="lbl">${forceCrit?'נזק קריטי בפועל':'נזק בפועל'}</div></div>
       </div>`;
-  });
+  };
+  document.getElementById('comboHit').addEventListener('click', ()=> rollCombo(undefined));
+  document.getElementById('comboCrit').addEventListener('click', ()=> rollCombo(true));
 
   saveState();
 }
@@ -1450,20 +1512,39 @@ function renderResourcesTab(){
         <button class="btn" id="rShortRest" style="flex:1;">מנוחה קצרה</button>
         <button class="btn success" id="rLongRest" style="flex:1;">מנוחה ארוכה</button>
       </div>
-      <p class="footnote">מנוחה כאן משפיעה על כל הדמות — חיים, חריצי קסם ויכולות מיוחדות כאחד.</p>
+      <p class="footnote">מנוחה כאן משפיעה על כל הדמות — חיים, חריצי קסם ויכולות מיוחדות כאחד. מנוחות זמינות גם בריכוז אחד בלשונית <a href="#" id="goHubResources" style="color:var(--gold-bright);">פאנל מצב</a>.</p>
     </div>
+
+    ${r.hpCur === 0 ? deathSaveCardHtml() : ''}
   `;
 
   document.getElementById('goSetupTop').addEventListener('click', (e)=>{ e.preventDefault(); goToTab('setup'); });
 
   document.getElementById('rDamage').addEventListener('click', ()=>{
     let amt = parseInt(document.getElementById('rHpAmount').value,10)||0;
+    const wasDown = r.hpCur === 0;
     if(r.hpTemp>0){ const used = Math.min(r.hpTemp, amt); r.hpTemp -= used; amt -= used; }
-    r.hpCur = clamp(r.hpCur-amt,0,r.hpMax); renderResourcesTab();
+    const newHp = clamp(r.hpCur-amt,0,r.hpMax);
+    // כלל 5E: נזק במצב 0 חיים = כישלון אוטומטי בהצלת מוות; ירידה ל-0 חיים מאפסת ומתחילה גסיסה חדשה
+    if(wasDown && amt>0){
+      state.deathSaves.failures = clamp(state.deathSaves.failures+1, 0, 3);
+      toast('💀 נזק במצב גסיסה — נרשם כישלון בהצלת מוות');
+    }else if(r.hpCur>0 && newHp===0){
+      state.deathSaves = {successes:0, failures:0};
+      toast('⚠️ ירדת ל-0 חיים — מצב גסיסה');
+    }
+    r.hpCur = newHp;
+    renderResourcesTab();
   });
   document.getElementById('rHeal').addEventListener('click', ()=>{
     const amt = parseInt(document.getElementById('rHpAmount').value,10)||0;
-    r.hpCur = clamp(r.hpCur+amt,0,r.hpMax); renderResourcesTab();
+    const wasDown = r.hpCur === 0;
+    r.hpCur = clamp(r.hpCur+amt,0,r.hpMax);
+    if(wasDown && r.hpCur>0){
+      state.deathSaves = {successes:0, failures:0};
+      toast('✓ קם לתחייה — הצלות המוות אופסו');
+    }
+    renderResourcesTab();
   });
   document.getElementById('rAddTemp').addEventListener('click', ()=>{
     const amt = parseInt(document.getElementById('rTempAmount').value,10)||0;
@@ -1471,8 +1552,100 @@ function renderResourcesTab(){
   });
   document.getElementById('rShortRest').addEventListener('click', doShortRest);
   document.getElementById('rLongRest').addEventListener('click', doLongRest);
+  document.getElementById('goHubResources').addEventListener('click', (e)=>{ e.preventDefault(); goToTab('hub'); });
+
+  // מצב גסיסה — קיים רק כשיש 0 חיים בפועל, ישר כאן בטאב המשאבים (לא בלשונית נפרדת)
+  if(r.hpCur === 0){
+    pane.querySelectorAll('[data-ds-set]').forEach(icon=>{
+      icon.addEventListener('click', ()=>{
+        const [kind, idx] = icon.dataset.dsSet.split(':');
+        setDeathSave(kind, parseInt(idx,10));
+        renderResourcesTab();
+      });
+    });
+    document.getElementById('dsRoll').addEventListener('click', ()=>{ rollDeathSave(); renderResourcesTab(); });
+    document.getElementById('dsReset').addEventListener('click', ()=>{ resetDeathSaves(); renderResourcesTab(); });
+  }
 
   saveState();
+}
+
+/* =========================================================
+   5.5 מצב גסיסה — DEATH SAVES INTERACTIVE (מוצג בטאב "משאבים" רק ב-0 חיים)
+   ========================================================= */
+function deathSaveStatus(){
+  const ds = state.deathSaves;
+  if(ds.failures >= 3) return 'dead';
+  if(ds.successes >= 3) return 'stable';
+  return 'dying';
+}
+// יציבות (3 הצלחות) מעירה את הדמות עם חיים 1, בדיוק כמו 20 טבעי — במקום להשאיר אותה מחוסרת הכרה על 0
+function applyStableWakeup(){
+  if(deathSaveStatus() === 'stable' && state.resources.hpCur === 0){
+    state.resources.hpCur = 1;
+    toast('✅ התייצבת — קם לתחייה עם חיים 1!');
+  }
+}
+// לחיצה על אייקון N מסמנת N הצלחות/כישלונות; לחיצה על אייקון שכבר פעיל מורידה בחזרה ל-N-1 (כמו פיפס חריצי הקסם)
+function setDeathSave(kind, idx){
+  const ds = state.deathSaves;
+  const key = kind === 'success' ? 'successes' : 'failures';
+  ds[key] = (idx < ds[key]) ? idx : idx+1;
+  ds[key] = clamp(ds[key], 0, 3);
+  applyStableWakeup();
+}
+function rollDeathSave(){
+  if(deathSaveStatus() !== 'dying') return;
+  const ds = state.deathSaves;
+  const roll = rollDie(20);
+  let msg;
+  if(roll === 20){
+    ds.successes = 0; ds.failures = 0;
+    state.resources.hpCur = Math.max(state.resources.hpCur, 1);
+    msg = '🎉 20 טבעי! קם לתחייה עם חיים 1!';
+  }else if(roll === 1){
+    ds.failures = clamp(ds.failures+2, 0, 3);
+    msg = '💀 1 טבעי — שני כישלונות!';
+  }else if(roll >= 10){
+    ds.successes = clamp(ds.successes+1, 0, 3);
+    msg = `הצלחה! (${roll})`;
+  }else{
+    ds.failures = clamp(ds.failures+1, 0, 3);
+    msg = `כישלון (${roll})`;
+  }
+  toast(msg);
+  applyStableWakeup();
+}
+function resetDeathSaves(){
+  state.deathSaves = {successes:0, failures:0};
+}
+function deathSaveCardHtml(){
+  const ds = state.deathSaves;
+  const status = deathSaveStatus();
+  const statusText = {dying:'גוסס...', stable:'יציב', dead:'מת'}[status];
+  const heartsRow = Array.from({length:3}, (_,i)=>`<div class="ds-icon success ${i<ds.successes?'on':''}" data-ds-set="success:${i}">${i<ds.successes?'❤️':'🤍'}</div>`).join('');
+  const skullsRow = Array.from({length:3}, (_,i)=>`<div class="ds-icon failure ${i<ds.failures?'on':''}" data-ds-set="failure:${i}">${i<ds.failures?'💀':'⬛'}</div>`).join('');
+  return `
+    <div class="card">
+      <h3>מצב גסיסה — הצלות ממוות</h3>
+      <p class="footnote" style="margin-top:0;">לחצו על הלבבות/גולגלות כדי לסמן הצלחות/כישלונות ידנית, או הטילו d20 ישירות. 3 הצלחות = יציב, 3 כישלונות = מת, 20 טבעי = קם לתחייה עם חיים.</p>
+      <div class="ds-status ${status}">${statusText}</div>
+      <div class="ds-track">
+        <div class="ds-group">
+          <div class="ds-lbl">הצלחות</div>
+          <div class="ds-icons">${heartsRow}</div>
+        </div>
+        <div class="ds-group">
+          <div class="ds-lbl">כישלונות</div>
+          <div class="ds-icons">${skullsRow}</div>
+        </div>
+      </div>
+      <div class="row" style="max-width:480px; margin:0 auto;">
+        <button class="btn gold" id="dsRoll" style="flex:1;" ${status!=='dying'?'disabled':''}>הטל d20</button>
+        <button class="btn" id="dsReset" style="flex:1;">איפוס (התייצבות ידנית)</button>
+      </div>
+      <p class="footnote" style="text-align:center;">נזק שמתקבל במצב הזה נרשם אוטומטית ככישלון; ריפוי מעל 0 חיים מאפס את המעקב.</p>
+    </div>`;
 }
 
 /* =========================================================
@@ -1540,6 +1713,18 @@ function renderLootTab(){
         </div>
       </div>
     </div>
+
+    <div class="card">
+      <h3>מחלק שלל קבוצתי <small>כמה מקבל כל שחקן מהערימה שנמצאה במבוך</small></h3>
+      <div class="row">
+        <div><label class="field-label">זהב שנמצא (ז"ז)</label><input type="number" id="lsGold" min="0" value="0"></div>
+        <div><label class="field-label">כסף שנמצא (כ"ז)</label><input type="number" id="lsSilver" min="0" value="0"></div>
+        <div><label class="field-label">נחושת שנמצאה (נ"ז)</label><input type="number" id="lsCopper" min="0" value="0"></div>
+        <div><label class="field-label">מספר שחקנים</label><input type="number" id="lsPlayers" min="1" value="${state.party.length || 4}"></div>
+        <div><button class="btn gold" id="lsSplit" style="width:100%;">חלק</button></div>
+      </div>
+      <div id="lsResult"></div>
+    </div>
   `;
 
   document.getElementById('gdAdd').addEventListener('click', ()=>{
@@ -1574,6 +1759,30 @@ function renderLootTab(){
     renderLootTab();
   }));
 
+  document.getElementById('lsSplit').addEventListener('click', ()=>{
+    const g = parseInt(document.getElementById('lsGold').value,10)||0;
+    const s = parseInt(document.getElementById('lsSilver').value,10)||0;
+    const c = parseInt(document.getElementById('lsCopper').value,10)||0;
+    const players = Math.max(1, parseInt(document.getElementById('lsPlayers').value,10)||1);
+    const perGold = Math.floor(g/players), remGold = g - perGold*players;
+    const perSilver = Math.floor(s/players), remSilver = s - perSilver*players;
+    const perCopper = Math.floor(c/players), remCopper = c - perCopper*players;
+    document.getElementById('lsResult').innerHTML = `
+      <div class="result-box">
+        <div class="stat"><div class="num">${perGold}</div><div class="lbl">זהב לשחקן</div></div>
+        <div class="stat"><div class="num">${perSilver}</div><div class="lbl">כסף לשחקן</div></div>
+        <div class="stat"><div class="num">${perCopper}</div><div class="lbl">נחושת לשחקן</div></div>
+      </div>
+      ${(remGold||remSilver||remCopper) ? `<div class="footnote">יתרה שלא מתחלקת בשלמות: ${remGold} זהב, ${remSilver} כסף, ${remCopper} נחושת — השאירו בקופה המשותפת או תנו למישהו ספציפי.</div>` : ''}
+      <button class="btn success" id="lsAddMine" style="margin-top:10px;">＋ הוסף את החלק שלי לארנק שלי</button>
+    `;
+    document.getElementById('lsAddMine').addEventListener('click', ()=>{
+      state.gold += perGold; state.silver += perSilver; state.copper += perCopper;
+      toast('✓ החלק שלך נוסף לארנק');
+      renderLootTab();
+    });
+  });
+
   saveState();
 }
 
@@ -1598,10 +1807,94 @@ function guessSpellDamageTypes(spell){
   const text = [spell.name, spell.note, ...(spell.tags||[])].join(' ').toLowerCase();
   return Object.entries(DAMAGE_TYPE_HE).filter(([,keys]) => keys.some(k=>text.includes(k))).map(([dt])=>dt);
 }
+// מחולל "תיאורי חיסול" — אלגוריתם בחירה אקראית מתוך מאגר טקסטים כתובים מראש, לא AI
+const FINISH_MOVE_TYPES = [
+  {key:'slash', label:'להב חד (חרב/גרזן)'},
+  {key:'pierce', label:'להב דוקר (רומח/פגיון)'},
+  {key:'blunt', label:'נשק קהה (מקבת/פטיש)'},
+  {key:'bow', label:'חץ וקשת'},
+  {key:'crossbow', label:'קשת-רובה'},
+  {key:'thrown', label:'נשק זריקה'},
+  {key:'unarmed', label:'ידיים ריקות'},
+  {key:'spell', label:'לחש קסום'},
+];
+const FINISH_MOVE_LINES = {
+  slash: [
+    'הלהב חותך קשת מבריקה באוויר ופוגע ב{target} בדיוק בין הצוואר לכתף — הוא קורס בשקט, כמעט בלי לדעת מה פגע בו.',
+    'אתה מסובב את הלהב וחותך לרוחב, ו{target} נחתך במכה אחת נקייה וחדה.',
+    'מכה אחת, מדויקת ואכזרית — {target} מביט בך בהלם רגע לפני שהוא קורס.',
+    'הלהב שלך שוקע עמוק, ו{target} מתמוטט לברכיים כשדם שוטף מהפצע הפעור.',
+  ],
+  pierce: [
+    'הלהב הדוקר חודר בדיוק בין הצלעות של {target} ויוצא מהצד השני — הוא נועץ לרגע על החוד, ואז נופל.',
+    'אתה דוחף קדימה בכל הכוח, ו{target} נאנח נשימה אחרונה ומתמוטט על הלהב.',
+    'דקירה מדויקת ישר ללב — {target} קופא במקומו, מביט בך בעיניים פעורות, ואז נופל ארצה.',
+    'הרומח שלך שורק באוויר ונועץ ישר בגרון {target}, שקורס בלי אפילו לגרגר מילה.',
+  ],
+  blunt: [
+    'המקבת נוחתת בעוצמה על {target} בקול פיצוח מחריד — הוא מתמוטט כמו שק חול.',
+    'מכה אחת מרוסקת שולחת את {target} טס אחורה, ונוחת חסר רוח חיים.',
+    'אתה מניף את הפטיש בקשת שלמה, ו{target} פשוט נמעך תחת המכה.',
+    'הנשק הקהה שלך פוגע ישר בגולגולת — {target} קורס לפני שהוא בכלל מבין מה קרה.',
+  ],
+  bow: [
+    'החץ שלך שורק באוויר, חודר ישירות דרך הגרון של {target} ונועץ אותו לקיר שמאחוריו. הוא מחרחר פעם אחרונה וקורס.',
+    'הטלה מושלמת — החץ מוצא את החריץ הקטן בשריון וקוצר את חייו של {target} במקום.',
+    'החץ טס בשקט מוחלט ופוגע ישר במטרה חיונית — {target} נופל בלי אפילו לצעוק.',
+    'החץ נועץ בלב {target}, שקורס ברך אחת ואז נשכב דומם.',
+  ],
+  crossbow: [
+    'הבורג משתחרר בשריקה חדה ונועץ ישר במצח {target} — הוא קופא לרגע לפני שהוא נופל.',
+    'הקשת-רובה שלך יורה בורג בודד שחודר את השריון כאילו הוא נייר, ו{target} מתמוטט.',
+    'צליל המיתר עדיין מהדהד כש{target} כבר שוכב ללא רוח חיים על הרצפה.',
+  ],
+  thrown: [
+    'הנשק מסתובב באוויר ונוחת בדיוק בגרון {target}, שנופל תוך כדי ניסיון עקר להוציא אותו.',
+    'הכידון שלך טס במסלול קטלני ונועץ בחזה {target}, שקורס לאחור.',
+    'אתה זורק בדיוק מושלם — הנשק נועץ ב{target}, שמביט בהלם ואז נופל.',
+  ],
+  unarmed: [
+    'אגרוף אחד ישר בסנטר שולח את {target} להתעלף לפני שהוא בכלל נוגע ברצפה.',
+    'אתה תופס את {target} ומטיח אותו ברצפה בעוצמה שמכריעה אותו במכה אחת.',
+    'בעיטה אחת מדויקת, ו{target} קורס ללא הכרה.',
+  ],
+  spell: [
+    'אתה משלים את הלחש, וגל אנרגיה טהורה פוגע ב{target}, שמתפוגג לענן קטן של אבק קסום.',
+    'הכוח הקסום נשפך דרך אצבעותיך ופוגע ב{target}, שנצרב מבפנים ונופל מפוחם.',
+    'הלחש נוגע ב{target}, וברק פראי רוקד על גופו לרגע לפני שהוא קורס עשן ואפר.',
+    'אתה משחרר את הקסם, ו{target} נעלם כמעט כליל בפיצוץ אור מסנוור.',
+  ],
+};
+function generateFinishingMove(type, targetName){
+  const lines = FINISH_MOVE_LINES[type] || FINISH_MOVE_LINES.slash;
+  const line = lines[Math.floor(Math.random()*lines.length)];
+  const target = (targetName||'').trim() || 'המפלצת';
+  return line.replace(/\{target\}/g, target);
+}
 const WOUND_STATUS_LABELS = {healthy:'בריא', light:'פצוע קל', medium:'פצוע בינוני', heavy:'פצוע קשה', dying:'גוסס'};
 const WOUND_STATUS_COLORS = {healthy:'var(--nature)', light:'var(--gold)', medium:'var(--utility)', heavy:'var(--combat)', dying:'var(--combat)'};
 function canHeal(){
   return state.spells.some(s => [s.name, s.note, ...(s.tags||[])].join(' ').includes('ריפוי'));
+}
+// יש/אין פצועים בקבוצה — נגזר מסטטוס הפציעה הקיים של כל חבר, בלי צורך במעקב נזק מדויק בנפרד
+function anyPartyInjured(){
+  return state.party.some(m => (state.combat.wounds[m.id]||'healthy') !== 'healthy');
+}
+// מוצא את לחש הריפוי הזול/הזמין ביותר כרגע — אותה לוגיקת "הכי חסכוני" כמו בטאב הלחשים, ממוקדת בריפוי
+function findHealingSpell(){
+  const candidates = state.spells
+    .filter(s => [s.name, s.note, ...(s.tags||[])].join(' ').includes('ריפוי'))
+    .sort((a,b)=>a.level-b.level);
+  for(const sp of candidates){
+    if(sp.usesPerDay){
+      if((sp.usesUsed||0) < sp.usesPerDay) return {spell: sp, reason:`הטלות ליום (נותרו ${sp.usesPerDay-(sp.usesUsed||0)}/${sp.usesPerDay})`};
+      continue;
+    }
+    if(sp.level === 0) return {spell: sp, reason:'קסם פשוט — ללא עלות בחריצים'};
+    const slot = state.slots[sp.level];
+    if(slot && slot.used < slot.max) return {spell: sp, reason:`דורש חריץ רמה ${sp.level} (נותרו ${slot.max - slot.used})`};
+  }
+  return null;
 }
 function splitDamageTypeList(str){
   return String(str||'').toLowerCase().split(',').map(s=>s.trim()).filter(Boolean);
@@ -1610,7 +1903,7 @@ function newMonsterGroup(overrides){
   return Object.assign({
     id: uid(), label:'מפלצת לא ידועה', count:1, known:null, hp:[],
     clues:{ hpMin:null, hpMax:null, type:'', size:'', cr:'', damageTests:[] },
-    candidates:[], candidatesLoading:false, damageLog:[],
+    candidates:[], candidatesLoading:false,
   }, overrides);
 }
 function setMonsterCount(g, n){
@@ -1681,7 +1974,9 @@ function renderMonsterGroupCard(g){
       <div><button class="icon-btn" data-monster-remove="${g.id}" title="הסר">✕</button></div>
     </div>`;
 
-  let body;
+  // מידע ידוע — מוצג רק אחרי זיהוי, אבל לא מחליף את איסוף הרמזים (מוצג תמיד למטה)
+  // כדי שאפשר יהיה להמשיך לאמת/לתקן זיהוי גם אחרי שהמפלצת "ידועה" באמצע הקרב
+  let knownInfo = '';
   if(g.known){
     const mon = g.known;
     const res = splitDamageTypeList(mon.damage_resistances);
@@ -1701,83 +1996,72 @@ function renderMonsterGroupCard(g){
       return `<div class="list-item"><span class="grow">${esc(s.name)}${note}</span></div>`;
     }).join('') || `<div class="empty-state">אין בספר הלחשים שלך לחש עם סוג נזק שזוהה אוטומטית.</div>`;
 
-    body = `
+    knownInfo = `
       <p class="ency-sub">${esc([mon.size, mon.type].filter(Boolean).join(' '))} · CR ${esc(mon.challenge_rating)} · AC ${esc(mon.armor_class)}</p>
       ${badges(vul,'חולשות')}${badges(res,'עמידויות')}${badges(imm,'חסינויות')}
       <div class="ency-section-title">חיים (HP)</div>
       ${hpRows}
       <div class="ency-section-title">לחשים מומלצים מהספר שלי</div>
       ${suggestions}
-    `;
-  }else{
-    const filterSelects = ENCY_FILTERS.monsters.map(f=>`
-      <div><label class="field-label">${esc(f.label)}</label>
-        <select data-clue-filter="${g.id}:${f.param}">
-          <option value="">לא ידוע</option>
-          ${f.options.map(o=>`<option value="${esc(o)}" ${g.clues[f.param]===o?'selected':''}>${esc(o)}</option>`).join('')}
-        </select>
-      </div>`).join('');
-
-    const dtOptions = Object.entries(DAMAGE_TYPE_LABELS).map(([k,l])=>`<option value="${k}">${esc(l)}</option>`).join('');
-    const resultLabels = {immune:'חסין (בלי נזק)', resisted:'עמיד (חצי נזק)', vulnerable:'פגיע (נזק כפול)', normal:'נזק רגיל'};
-    const testsList = g.clues.damageTests.map((t,i)=>`
-      <div class="list-item"><span class="grow">${esc(DAMAGE_TYPE_LABELS[t.type]||t.type)} — ${resultLabels[t.result]}</span>
-        <button class="icon-btn" data-clue-test-del="${g.id}:${i}">✕</button></div>`).join('');
-
-    const candidatesBox = g.candidatesLoading
-      ? `<div class="ency-loader"><span class="ency-spinner"></span>מחפש מועמדים...</div>`
-      : g.candidates.length
-        ? `<div class="footnote">${g.candidates.length} מועמדים אפשריים לפי הרמזים:</div>` +
-          g.candidates.slice(0,20).map((m,i)=>`
-            <div class="list-item"><span class="grow">${esc(m.name)} <span style="color:var(--ink-faint);">(${esc(m.document__title||'')} · CR ${esc(m.challenge_rating)} · ${m.hit_points} חיים)</span></span>
-              <button class="btn small gold" data-clue-pick="${g.id}:${i}">זו היא!</button></div>`).join('')
-        : `<div class="empty-state">אין עדיין מועמדים — לחצו "חפש מועמדים" כדי לשלוף מ-Open5e.</div>`;
-
-    body = `
-      <div class="ency-section-title">חיפוש מועמדים (מה ידוע עליה מראש)</div>
-      <div class="row">${filterSelects}
-        <div><button class="btn gold" data-clue-search="${g.id}" style="width:100%;">חפש מועמדים</button></div>
-      </div>
-      <div style="margin:8px 0 14px;">${candidatesBox}</div>
-
-      <div class="ency-section-title">רמז: טווח חיים ("בין X ל-Y חיים")</div>
-      <div class="row">
-        <div><label class="field-label">מינימום</label><input type="number" data-clue-hpmin="${g.id}" value="${g.clues.hpMin??''}"></div>
-        <div><label class="field-label">מקסימום</label><input type="number" data-clue-hpmax="${g.id}" value="${g.clues.hpMax??''}"></div>
-        <div><button class="btn" data-clue-hpapply="${g.id}" style="width:100%;">החל רמז</button></div>
-      </div>
-
-      <div class="ency-section-title">רמז: מה קרה כשניסינו סוג נזק מסוים</div>
-      <div class="row">
-        <div><label class="field-label">סוג נזק</label><select data-clue-dt-type="${g.id}">${dtOptions}</select></div>
-        <div><label class="field-label">תוצאה</label>
-          <select data-clue-dt-result="${g.id}">
-            <option value="normal">נזק רגיל</option>
-            <option value="resisted">עמיד (חצי נזק)</option>
-            <option value="immune">חסין (בלי נזק)</option>
-            <option value="vulnerable">פגיע (נזק כפול)</option>
-          </select>
-        </div>
-        <div><button class="btn" data-clue-dt-add="${g.id}" style="width:100%;">הוסף רמז</button></div>
-      </div>
-      ${testsList}
+      <button class="btn small" data-monster-unidentify="${g.id}" style="margin-top:10px;">↺ בטל זיהוי — המשך לחפש</button>
     `;
   }
 
-  const damageLog = `
-    <div class="ency-section-title">נזק שהתקבל מהמפלצת (רמז לזיהוי בלבד)</div>
-    <div class="row">
-      <div><label class="field-label">למי</label>
-        <select data-dmglog-target="${g.id}"><option value="party">חבר קבוצה</option><option value="self">אני</option></select>
-      </div>
-      <div><label class="field-label">כמות נזק</label><input type="number" data-dmglog-amount="${g.id}" min="0" placeholder="0"></div>
-      <div style="flex:2;"><label class="field-label">הערה (לא חובה)</label><input type="text" data-dmglog-note="${g.id}" placeholder="למשל: התקפת חרטום"></div>
-      <div><button class="btn" data-dmglog-add="${g.id}" style="width:100%;">רשום</button></div>
+  // רמזים — נגישים תמיד, גם למפלצת "ידועה", כי אפשר לגלות מידע חדש (עמידות/חולשה) באמצע הקרב עצמו
+  const filterSelects = ENCY_FILTERS.monsters.map(f=>`
+    <div><label class="field-label">${esc(f.label)}</label>
+      <select data-clue-filter="${g.id}:${f.param}">
+        <option value="">לא ידוע</option>
+        ${f.options.map(o=>`<option value="${esc(o)}" ${g.clues[f.param]===o?'selected':''}>${esc(o)}</option>`).join('')}
+      </select>
+    </div>`).join('');
+
+  const dtOptions = Object.entries(DAMAGE_TYPE_LABELS).map(([k,l])=>`<option value="${k}">${esc(l)}</option>`).join('');
+  const resultLabels = {immune:'חסין (בלי נזק)', resisted:'עמיד (חצי נזק)', vulnerable:'פגיע (נזק כפול)', normal:'נזק רגיל'};
+  const testsList = g.clues.damageTests.map((t,i)=>`
+    <div class="list-item"><span class="grow">${esc(DAMAGE_TYPE_LABELS[t.type]||t.type)} — ${resultLabels[t.result]}</span>
+      <button class="icon-btn" data-clue-test-del="${g.id}:${i}">✕</button></div>`).join('');
+
+  const candidatesBox = g.candidatesLoading
+    ? `<div class="ency-loader"><span class="ency-spinner"></span>מחפש מועמדים...</div>`
+    : g.candidates.length
+      ? `<div class="footnote">${g.candidates.length} מועמדים אפשריים לפי הרמזים:</div>` +
+        g.candidates.slice(0,20).map((m,i)=>`
+          <div class="list-item"><span class="grow">${esc(m.name)} <span style="color:var(--ink-faint);">(${esc(m.document__title||'')} · CR ${esc(m.challenge_rating)} · ${m.hit_points} חיים)</span></span>
+            <button class="btn small gold" data-clue-pick="${g.id}:${i}">זו היא!</button></div>`).join('')
+      : `<div class="empty-state">אין עדיין מועמדים — לחצו "חפש מועמדים" כדי לשלוף מ-Open5e.</div>`;
+
+  const cluesSection = `
+    <div class="ency-section-title">${g.known ? 'המשך איסוף רמזים (אם מתגלה מידע חדש באמצע הקרב)' : 'חיפוש מועמדים (מה ידוע עליה מראש)'}</div>
+    <div class="row">${filterSelects}
+      <div><button class="btn gold" data-clue-search="${g.id}" style="width:100%;">חפש מועמדים</button></div>
     </div>
-    ${g.damageLog.length ? g.damageLog.map(d=>`<div class="list-item"><span class="grow">${d.target==='party'?'לחבר קבוצה':'אליי'}: ${d.amount} נזק ${d.note?'— '+esc(d.note):''}</span></div>`).join('') : ''}
+    <div style="margin:8px 0 14px;">${candidatesBox}</div>
+
+    <div class="ency-section-title">רמז: טווח חיים ("בין X ל-Y חיים")</div>
+    <div class="row">
+      <div><label class="field-label">מינימום</label><input type="number" data-clue-hpmin="${g.id}" value="${g.clues.hpMin??''}"></div>
+      <div><label class="field-label">מקסימום</label><input type="number" data-clue-hpmax="${g.id}" value="${g.clues.hpMax??''}"></div>
+      <div><button class="btn" data-clue-hpapply="${g.id}" style="width:100%;">החל רמז</button></div>
+    </div>
+
+    <div class="ency-section-title">רמז: מה קרה כשניסינו סוג נזק מסוים</div>
+    <div class="row">
+      <div><label class="field-label">סוג נזק</label><select data-clue-dt-type="${g.id}">${dtOptions}</select></div>
+      <div><label class="field-label">תוצאה</label>
+        <select data-clue-dt-result="${g.id}">
+          <option value="normal">נזק רגיל</option>
+          <option value="resisted">עמיד (חצי נזק)</option>
+          <option value="immune">חסין (בלי נזק)</option>
+          <option value="vulnerable">פגיע (נזק כפול)</option>
+        </select>
+      </div>
+      <div><button class="btn" data-clue-dt-add="${g.id}" style="width:100%;">הוסף רמז</button></div>
+    </div>
+    ${testsList}
   `;
 
-  return `<div class="card">${woundHeader}${body}${damageLog}</div>`;
+  return `<div class="card">${woundHeader}${knownInfo}${cluesSection}</div>`;
 }
 
 function renderCombatTab(){
@@ -1829,15 +2113,35 @@ function renderCombatTab(){
         </div>`;
       }).join('') || `<div class="empty-state">אין עדיין חברי קבוצה. הוסיפו למטה.</div>`}
       <button class="btn gold" id="partyAdd" style="margin-top:10px;">＋ הוסף חבר קבוצה</button>
+      ${anyPartyInjured() ? (()=>{
+        const rec = findHealingSpell();
+        return rec
+          ? `<div class="recommend-box" style="margin-top:14px;"><div class="title">⚕️ יש פצועים בקבוצה — מומלץ להטיל:</div><div class="spell-name">${esc(rec.spell.name)}</div><div class="spell-meta">${rec.reason}</div></div>`
+          : `<div class="empty-state" style="margin-top:14px;">יש פצועים בקבוצה, אך אין לחש ריפוי זמין כרגע — שקלו מנוחה קצרה.</div>`;
+      })() : ''}
     </div>` : '';
 
   const monsterCards = c.monsters.map(g=>renderMonsterGroupCard(g)).join('');
+
+  const finishCard = `
+    <div class="card">
+      <h3>מחולל תיאורי חיסול <small>"איך אתה רוצה לעשות את זה?"</small></h3>
+      <div class="row">
+        <div><label class="field-label">סוג נשק/התקפה</label>
+          <select id="finTypeSelect">${FINISH_MOVE_TYPES.map(t=>`<option value="${t.key}">${esc(t.label)}</option>`).join('')}</select>
+        </div>
+        <div style="flex:2"><label class="field-label">שם המפלצת (לא חובה)</label><input type="text" id="finTargetName" placeholder="למשל: האורק"></div>
+        <div><button class="btn gold" id="finGenerate" style="width:100%;">🎲 הגרל תיאור</button></div>
+      </div>
+      <div id="finResult"></div>
+    </div>`;
 
   pane.innerHTML = `
     <h2 class="pane-title">עוזר קרב</h2>
     <p class="pane-note">מה עושים בתור, מצב הקבוצה, וזיהוי מפלצות תוך כדי קרב לפי רמזים שנאספים.</p>
 
     ${actionCards}
+    ${finishCard}
     ${woundsCard}
 
     <div style="margin:20px 0 10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -1849,6 +2153,13 @@ function renderCombatTab(){
     </div>
     ${monsterCards || `<div class="empty-state">אין מפלצות בקרב עדיין. הוסיפו מפלצת מזוהה דרך כפתור ה"הוסף לעוזר הקרב" באנציקלופדיה, או "מפלצת לא ידועה" לזיהוי תוך כדי הקרב.</div>`}
   `;
+
+  document.getElementById('finGenerate').addEventListener('click', ()=>{
+    const type = document.getElementById('finTypeSelect').value;
+    const target = document.getElementById('finTargetName').value;
+    const text = generateFinishingMove(type, target);
+    document.getElementById('finResult').innerHTML = `<div class="recommend-box" style="margin-top:12px;"><div class="spell-meta" style="font-size:15px; line-height:1.6; color:var(--ink);">${esc(text)}</div></div>`;
+  });
 
   document.getElementById('combatNewFight').addEventListener('click', ()=>{
     c.wounds = {};
@@ -1930,12 +2241,9 @@ function renderCombatTab(){
     renderCombatTab();
   }));
 
-  pane.querySelectorAll('[data-dmglog-add]').forEach(b=>b.addEventListener('click', ()=>{
-    const g = c.monsters.find(x=>x.id===b.dataset.dmglogAdd); if(!g) return;
-    const target = pane.querySelector(`[data-dmglog-target="${g.id}"]`).value;
-    const amount = parseInt(pane.querySelector(`[data-dmglog-amount="${g.id}"]`).value,10)||0;
-    const note = pane.querySelector(`[data-dmglog-note="${g.id}"]`).value.trim();
-    g.damageLog.unshift({target, amount, note, ts:Date.now()});
+  pane.querySelectorAll('[data-monster-unidentify]').forEach(b=>b.addEventListener('click', ()=>{
+    const g = c.monsters.find(x=>x.id===b.dataset.monsterUnidentify); if(!g) return;
+    g.known = null;
     renderCombatTab();
   }));
 
