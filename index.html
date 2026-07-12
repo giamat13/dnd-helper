@@ -477,6 +477,7 @@ const state = {
     className: '',
     race: '',
     level: 1,
+    abilities: {str:10, dex:10, con:10, int:10, wis:10, cha:10},
   },
 
   gold: 0,
@@ -589,6 +590,10 @@ const FULL_CASTER_SLOT_TABLE = {
   16:[4,3,3,3,2,1,1,1,0],  17:[4,3,3,3,2,1,1,1,1],  18:[4,3,3,3,3,1,1,1,1],
   19:[4,3,3,3,3,2,1,1,1],  20:[4,3,3,3,3,2,2,1,1],
 };
+
+function abilityMod(score){
+  return Math.floor(((score||10)-10)/2);
+}
 
 // אומדן חיים מקסימליים: קובייה מלאה ברמה 1, ממוצע הקובייה (מעוגל למעלה) לכל רמה נוספת, ועוד בונוס קונ' לכל רמה
 function estimateMaxHp(selectedClass, hdType, level, conMod){
@@ -743,6 +748,8 @@ function loadState(){
       state.combat.wounds = {};
     }
     if(!Array.isArray(state.party)) state.party = [];
+    // מיגרציה: תוספת יכולות (כוח/זריזות/חוסן/תבונה/חוכמה/כריזמה) לדמויות ישנות שנשמרו לפני התוספת
+    if(!state.character.abilities) state.character.abilities = {str:10, dex:10, con:10, int:10, wis:10, cha:10};
   }catch(e){}
 }
 
@@ -845,6 +852,26 @@ function renderSetupTab(){
     </div>
 
     <div class="card">
+      <h3>יכולות</h3>
+      <div class="grid3">
+        ${[['str','כוח'],['dex','זריזות'],['con','חוסן'],['int','תבונה'],['wis','חוכמה'],['cha','כריזמה']].map(([key,label])=>{
+          const score = c.abilities[key];
+          const mod = abilityMod(score);
+          return `
+          <div>
+            <label class="field-label">${label}</label>
+            <input type="number" min="1" max="30" data-st-ability="${key}" value="${score}">
+            <div class="footnote" style="margin-top:4px;">מודיפייטור: <strong style="color:var(--gold-bright);">${mod>=0?'+':''}${mod}</strong></div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="footnote" style="margin-top:10px;">
+        מודיפייטור החוסן (Constitution) לפי הניקוד למעלה: <strong style="color:var(--gold-bright);">${abilityMod(c.abilities.con)>=0?'+':''}${abilityMod(c.abilities.con)}</strong>
+        <button class="btn small" id="stApplyConMod" style="margin-inline-start:6px;">החל על "בונוס קונסטיטוציה"</button>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>חריצי קסם מקסימליים <small>${currentClassIsCaster() ? 'מחושב אוטומטית מהרמה (טבלת Full Caster)' : 'רלוונטי ללוחשות בלבד'}</small></h3>
       <div class="grid3">
         ${[1,2,3,4,5,6,7,8,9].map(lvl=>`
@@ -881,6 +908,20 @@ function renderSetupTab(){
   document.getElementById('stApplyHp')?.addEventListener('click', ()=>{
     r.hpMax = estimateMaxHp(selectedClass, r.hdType, c.level, r.conMod);
     r.hpCur = clamp(r.hpCur, 0, r.hpMax);
+    renderSetupTab();
+  });
+
+  pane.querySelectorAll('[data-st-ability]').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const key = inp.dataset.stAbility;
+      c.abilities[key] = clamp(parseInt(inp.value,10)||10, 1, 30);
+      saveState();
+      renderSetupTab();
+    });
+  });
+  document.getElementById('stApplyConMod')?.addEventListener('click', ()=>{
+    r.conMod = abilityMod(c.abilities.con);
+    saveState();
     renderSetupTab();
   });
 
@@ -1374,6 +1415,12 @@ function renderDiceTab(){
           </select>
         </div>
         <div><label class="field-label">בונוס קבוע</label><input type="number" id="dxMod" value="0"></div>
+        <div><label class="field-label">בונוס מיכולת</label>
+          <select id="dxAbility">
+            <option value="">ללא</option>
+            ${[['str','כוח'],['dex','זריזות'],['con','חוסן'],['int','תבונה'],['wis','חוכמה'],['cha','כריזמה']].map(([key,label])=>`<option value="${key}">${label}</option>`).join('')}
+          </select>
+        </div>
         <div><label class="field-label">מצב</label>
           <select id="dxMode">
             <option value="normal">רגיל</option>
@@ -1396,6 +1443,10 @@ function renderDiceTab(){
 
   document.getElementById('dxRoll').addEventListener('click', doDiceRoll);
   document.getElementById('dxSimulate').addEventListener('click', doSimulate);
+  document.getElementById('dxAbility').addEventListener('change', e=>{
+    const key = e.target.value;
+    document.getElementById('dxMod').value = key ? abilityMod(state.character.abilities[key]) : 0;
+  });
 }
 
 function readDiceInputs(){
